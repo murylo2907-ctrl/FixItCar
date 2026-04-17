@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { AppDataProvider } from './context/AppDataContext.jsx'
 import DashboardLayout from './components/dashboard/DashboardLayout.jsx'
@@ -26,6 +26,7 @@ import AprovacoesSeguradoraPage from './pages/dashboard/seguradora/AprovacoesSeg
 import CadastroVeiculosSeguradoraPage from './pages/dashboard/seguradora/CadastroVeiculosSeguradoraPage.jsx'
 import HistoricoSinistrosSeguradoraPage from './pages/dashboard/seguradora/HistoricoSinistrosSeguradoraPage.jsx'
 import MeuPerfilSeguradoraPage from './pages/dashboard/seguradora/MeuPerfilSeguradoraPage.jsx'
+import AdminUsuariosPorPerfilPage from './pages/dashboard/admin/AdminUsuariosPorPerfilPage.jsx'
 
 export default function App() {
   return (
@@ -58,6 +59,10 @@ export default function App() {
               <Route path="seguradora/cadastro-veiculos" element={<CadastroVeiculosSeguradoraPage />} />
               <Route path="seguradora/historico" element={<HistoricoSinistrosSeguradoraPage />} />
               <Route path="seguradora/perfil" element={<MeuPerfilSeguradoraPage />} />
+              <Route path="admin" element={<Outlet />}>
+                <Route index element={<Navigate to="motoristas" replace />} />
+                <Route path=":modulo" element={<AdminUsuariosPorPerfilPage />} />
+              </Route>
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

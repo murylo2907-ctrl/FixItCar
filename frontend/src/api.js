@@ -6,6 +6,7 @@ const roleLabels = {
   mecanico: 'Oficina / Mecânica',
   autopecas: 'Autopeças',
   seguradora: 'Seguradora',
+  administrador: 'Administrador',
 }
 
 /**

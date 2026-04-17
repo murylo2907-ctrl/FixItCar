@@ -38,5 +38,8 @@ export function getNotificationSummary(user, solicitacoes, avisosMotorista, pedi
     ).length
     return { listaNotificacoes: [], totalBadge: n, pendentesOrcamento: 0 }
   }
+  if (user.role === 'administrador') {
+    return { listaNotificacoes: [], totalBadge: 0, pendentesOrcamento: 0 }
+  }
   return { listaNotificacoes: [], totalBadge: 0, pendentesOrcamento: 0 }
 }

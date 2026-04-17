@@ -1,7 +1,9 @@
-import { NavLink, Outlet, Navigate } from 'react-router-dom'
+import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth.js'
+import { defaultDashboardPath } from '../../lib/dashboardPaths.js'
 import { servicoLabelForRole } from '../../lib/perfilTipoConta.js'
 import NotificationBell from '../marketing/NotificationBell.jsx'
+import AdminDashboardLayout from '../admin/AdminDashboardLayout.jsx'
 
 const linkCls = ({ isActive }) =>
   `block rounded-lg px-3 py-2 text-sm font-medium ${isActive ? 'bg-brand-cyan/35 text-slate-900' : 'text-slate-600 hover:bg-slate-100'}`
@@ -36,9 +38,24 @@ const navByRole = {
 
 export default function DashboardLayout() {
   const { user, logout, isAuthenticated } = useAuth()
+  const location = useLocation()
 
   if (!isAuthenticated || !user?.role) {
     return <Navigate to="/login" replace />
+  }
+
+  const isAdminPath = location.pathname.startsWith('/dashboard/admin')
+
+  if (isAdminPath && user.role !== 'administrador') {
+    return <Navigate to={defaultDashboardPath(user.role)} replace />
+  }
+
+  if (user.role === 'administrador' && !isAdminPath) {
+    return <Navigate to="/dashboard/admin/motoristas" replace />
+  }
+
+  if (user.role === 'administrador') {
+    return <AdminDashboardLayout />
   }
 
   const items = navByRole[user.role] || []

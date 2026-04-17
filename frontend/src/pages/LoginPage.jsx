@@ -41,9 +41,13 @@ export default function LoginPage() {
 
   const dicaInfer = email ? getRegisteredRoleForEmail(email) || inferRoleFromEmail(email) : null
   const dicaLabel = dicaInfer
-    ? { motorista: 'Motorista', mecanico: 'Oficina / Mecânica', autopecas: 'Autopeças', seguradora: 'Seguradora' }[
-        dicaInfer
-      ]
+    ? {
+        motorista: 'Motorista',
+        mecanico: 'Oficina / Mecânica',
+        autopecas: 'Autopeças',
+        seguradora: 'Seguradora',
+        administrador: 'Administrador',
+      }[dicaInfer]
     : ''
 
   async function handleSubmit(e) {

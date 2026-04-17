@@ -4,6 +4,7 @@ const MAP = {
   mecanico: 'Oficina / Mecânica',
   autopecas: 'Autopeças',
   seguradora: 'Seguradora',
+  administrador: 'Administrador',
 }
 
 export function servicoLabelForRole(role) {
