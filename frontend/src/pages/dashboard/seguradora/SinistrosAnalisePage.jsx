@@ -71,7 +71,11 @@ export default function SinistrosAnalisePage() {
   }
 
   const pendentes = solicitacoes
-    .filter((s) => s.status === CHAMADO_STATUS.ENVIADO_PARA_SEGURADORA)
+    .filter(
+      (s) =>
+        s.status === CHAMADO_STATUS.ENVIADO_PARA_SEGURADORA ||
+        (s.usaSeguro && s.status === CHAMADO_STATUS.PENDENTE_MECANICO_SEGURO)
+    )
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
 
   function abrirModalAviso(item) {

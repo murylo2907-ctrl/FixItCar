@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { CalendarRange, CircleDollarSign, ClipboardCheck, Timer } from 'lucide-react'
 import MecanicoChamadoModal from '../../../components/dashboard/MecanicoChamadoModal.jsx'
 import { useAppData } from '../../../hooks/useAppData.js'
+import { useAuth } from '../../../hooks/useAuth.js'
+import { solicitacaoHistoricoMecanico } from '../../../lib/mecanicoSolicitacaoFilter.js'
 import {
   CHAMADO_STATUS,
   diasCorridosEntre,
@@ -28,6 +30,7 @@ function CartaoResumoHistorico({ titulo, valor, hint, iconWrapClass, icon }) {
 }
 
 export default function HistoricoServicoPage() {
+  const { user } = useAuth()
   const { solicitacoes, syncAppData } = useAppData()
   const [sel, setSel] = useState(null)
   const selLive = sel ? solicitacoes.find((s) => s.id === sel.id) ?? sel : null
@@ -43,6 +46,7 @@ export default function HistoricoServicoPage() {
 
   const lista = [...solicitacoes]
     .filter((s) => s.status === CHAMADO_STATUS.CONCLUIDO)
+    .filter((s) => solicitacaoHistoricoMecanico(s, user?.id))
     .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
 
   const painel = useMemo(() => {
@@ -78,7 +82,7 @@ export default function HistoricoServicoPage() {
         <h1 className="text-xl font-bold text-slate-900 tracking-tight">Histórico de serviço</h1>
         <p className="text-sm text-slate-500 mt-1 max-w-2xl">
           Resumo dos chamados já finalizados e lista detalhada. Valores seguem o orçamento registrado no sistema; dados
-          ficam neste navegador (local).
+          sincronizam com a API quando você está logado e o servidor está ativo.
         </p>
       </div>
 

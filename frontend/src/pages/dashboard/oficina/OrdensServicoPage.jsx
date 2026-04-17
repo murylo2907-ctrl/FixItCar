@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import MecanicoChamadoModal from '../../../components/dashboard/MecanicoChamadoModal.jsx'
 import { useAppData } from '../../../hooks/useAppData.js'
+import { useAuth } from '../../../hooks/useAuth.js'
 import { CHAMADO_STATUS, labelChamadoStatus } from '../../../lib/chamadoFlow.js'
+import { solicitacaoVisivelParaMecanico } from '../../../lib/mecanicoSolicitacaoFilter.js'
 
 export default function OrdensServicoPage() {
+  const { user } = useAuth()
   const { solicitacoes, syncAppData } = useAppData()
   const [sel, setSel] = useState(null)
   const selLive = sel ? solicitacoes.find((s) => s.id === sel.id) ?? sel : null
@@ -22,6 +25,7 @@ export default function OrdensServicoPage() {
       (s) =>
         s.status !== CHAMADO_STATUS.CONCLUIDO && s.status !== CHAMADO_STATUS.FINALIZADO_PELA_SEGURADORA
     )
+    .filter((s) => solicitacaoVisivelParaMecanico(s, user?.id))
     .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
 
   return (

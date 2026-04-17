@@ -27,15 +27,17 @@ export default function MecanicoChamadoModal({ solicitacao: s, onClose }) {
 
   const [relatoSeguradora, setRelatoSeguradora] = useState(s.descricaoMecanico || '')
   const [laudo, setLaudo] = useState(s.descricaoMecanico || '')
-  const [pecas, setPecas] = useState(
-    s.pecasSugeridas?.length ? s.pecasSugeridas.map((p) => ({ ...p, precoUnitario: p.precoUnitario ?? '' })) : [emptyPeca()]
+  const [itensOrcamento, setItensOrcamento] = useState(() =>
+    s.pecasSugeridas?.length ? s.pecasSugeridas.map((p) => ({ ...p, precoUnitario: p.precoUnitario ?? '' })) : []
   )
+  const [rascunhoPeca, setRascunhoPeca] = useState(() => emptyPeca())
+  const [erroRascunho, setErroRascunho] = useState('')
 
   const pedidosDaOs = pedidos.filter((p) => p.solicitacaoId === s.id)
 
   function submitOrcamento(e) {
     e.preventDefault()
-    const rows = pecas
+    const rows = itensOrcamento
       .map((p) => ({
         nome: String(p.nome || '').trim(),
         qtd: Math.max(1, Number(p.qtd) || 1),
@@ -47,13 +49,38 @@ export default function MecanicoChamadoModal({ solicitacao: s, onClose }) {
     onClose?.()
   }
 
-  function addPecaRow() {
-    setPecas((list) => [...list, emptyPeca()])
+  function adicionarPecaDoRascunho() {
+    const nome = String(rascunhoPeca.nome || '').trim()
+    if (!nome) {
+      setErroRascunho('Informe a peça ou o serviço antes de adicionar.')
+      return
+    }
+    setErroRascunho('')
+    const qtd = Math.max(1, Number(rascunhoPeca.qtd) || 1)
+    const precoRaw = rascunhoPeca.precoUnitario
+    setItensOrcamento((list) => [...list, { nome, qtd, precoUnitario: precoRaw }])
+    setRascunhoPeca(emptyPeca())
   }
 
-  function updatePeca(i, field, value) {
-    setPecas((list) => list.map((row, j) => (j === i ? { ...row, [field]: value } : row)))
+  function removerItemOrcamento(i) {
+    setItensOrcamento((list) => list.filter((_, j) => j !== i))
   }
+
+  const nomeMotorista = String(s.motoristaNome || '').trim()
+  const modeloVeiculo = String(s.modelo || '').trim()
+
+  const modalTitle = (
+    <div className="space-y-1">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Ordem de serviço</p>
+      <p className="text-lg font-bold text-slate-900 leading-snug break-words">
+        {nomeMotorista || 'Motorista'}
+      </p>
+      <p className="text-sm text-slate-600 font-normal leading-snug">
+        Placa <span className="font-mono font-semibold text-slate-800">{s.placa}</span>
+        {modeloVeiculo ? <span className="text-slate-500"> · {modeloVeiculo}</span> : null}
+      </p>
+    </div>
+  )
 
   const body = (() => {
     if (
@@ -71,7 +98,10 @@ export default function MecanicoChamadoModal({ solicitacao: s, onClose }) {
           <button
             type="button"
             onClick={() => {
-              mecanicoConfirmarTriagem(s.id)
+              mecanicoConfirmarTriagem(s.id, {
+                mecanicoId: user?.id,
+                mecanicoNome: mecanicaNome,
+              })
               onClose?.()
             }}
             className="w-full rounded-lg bg-brand-cyan-deep text-white font-semibold py-2.5 text-sm"
@@ -120,47 +150,119 @@ export default function MecanicoChamadoModal({ solicitacao: s, onClose }) {
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
             />
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-600">Peças e serviços</span>
-              <button type="button" onClick={addPecaRow} className="text-xs font-semibold text-brand-cyan-deep hover:underline">
-                + linha
-              </button>
+          <div className="space-y-3">
+            <div>
+              <span className="text-xs font-semibold text-slate-700">Peças e serviços</span>
+              <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                Preencha uma linha e clique em <strong className="font-medium text-slate-600">Adicionar</strong> para incluir no
+                orçamento. Os itens aparecem na lista abaixo.
+              </p>
             </div>
-            {pecas.map((p, i) => (
-              <div key={i} className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-12 sm:col-span-5">
-                  <input
-                    className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-                    placeholder="Descrição"
-                    value={p.nome}
-                    onChange={(e) => updatePeca(i, 'nome', e.target.value)}
-                  />
-                </div>
-                <div className="col-span-4 sm:col-span-2">
-                  <input
-                    type="number"
-                    min={1}
-                    className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-                    value={p.qtd}
-                    onChange={(e) => updatePeca(i, 'qtd', e.target.value)}
-                  />
-                </div>
-                <div className="col-span-8 sm:col-span-3">
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-                    placeholder="R$ / un."
-                    value={p.precoUnitario}
-                    onChange={(e) => updatePeca(i, 'precoUnitario', e.target.value)}
-                  />
-                </div>
+            <div className="hidden sm:grid sm:grid-cols-12 gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500 px-0.5">
+              <div className="col-span-5">Peça ou serviço</div>
+              <div className="col-span-2 text-center">Qtd</div>
+              <div className="col-span-3">Valor unit. (R$)</div>
+              <div className="col-span-2 text-center"> </div>
+            </div>
+            <div className="grid grid-cols-12 gap-2 items-end rounded-lg border border-slate-100 bg-slate-50/50 p-2 sm:border-slate-200 sm:bg-slate-50/30 sm:p-3">
+              <div className="col-span-12 sm:col-span-5">
+                <label className="sm:hidden block text-[10px] font-medium text-slate-500 mb-0.5">Peça ou serviço</label>
+                <input
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
+                  placeholder="Ex.: pastilha de freio, troca de óleo"
+                  value={rascunhoPeca.nome}
+                  onChange={(e) => {
+                    setErroRascunho('')
+                    setRascunhoPeca((row) => ({ ...row, nome: e.target.value }))
+                  }}
+                />
               </div>
-            ))}
+              <div className="col-span-4 sm:col-span-2">
+                <label className="sm:hidden block text-[10px] font-medium text-slate-500 mb-0.5">Qtd</label>
+                <input
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm tabular-nums"
+                  placeholder="1"
+                  value={rascunhoPeca.qtd}
+                  onChange={(e) => setRascunhoPeca((row) => ({ ...row, qtd: e.target.value }))}
+                />
+              </div>
+              <div className="col-span-5 sm:col-span-3">
+                <label className="sm:hidden block text-[10px] font-medium text-slate-500 mb-0.5">Valor unit. (R$)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  inputMode="decimal"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm tabular-nums"
+                  placeholder="0,00"
+                  value={rascunhoPeca.precoUnitario}
+                  onChange={(e) => setRascunhoPeca((row) => ({ ...row, precoUnitario: e.target.value }))}
+                />
+              </div>
+              <div className="col-span-3 sm:col-span-2">
+                <label className="sm:hidden block text-[10px] font-medium text-slate-500 mb-0.5 opacity-0 pointer-events-none select-none">
+                  Ação
+                </label>
+                <button
+                  type="button"
+                  onClick={adicionarPecaDoRascunho}
+                  className="w-full rounded-lg bg-brand-cyan-deep text-white text-xs font-semibold py-2 px-2 shadow-sm hover:opacity-95 active:opacity-90"
+                >
+                  Adicionar
+                </button>
+              </div>
+            </div>
+            {erroRascunho ? <p className="text-xs text-red-600">{erroRascunho}</p> : null}
+            <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+              <p className="text-xs font-semibold text-slate-600 px-3 py-2 bg-slate-50 border-b border-slate-100">
+                Itens do orçamento
+                {itensOrcamento.length > 0 ? (
+                  <span className="font-normal text-slate-500"> ({itensOrcamento.length})</span>
+                ) : null}
+              </p>
+              {itensOrcamento.length === 0 ? (
+                <p className="px-3 py-4 text-sm text-slate-500 text-center">Nenhum item ainda. Adicione peças ou serviços acima.</p>
+              ) : (
+                <ul className="divide-y divide-slate-100 max-h-52 overflow-y-auto">
+                  {itensOrcamento.map((p, i) => {
+                    const unit =
+                      p.precoUnitario === '' || p.precoUnitario === undefined
+                        ? null
+                        : Number(p.precoUnitario)
+                    const q = Math.max(1, Number(p.qtd) || 1)
+                    const sub = unit != null && !Number.isNaN(unit) ? unit * q : null
+                    return (
+                      <li key={`${p.nome}-${i}`} className="px-3 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm">
+                        <span className="font-medium text-slate-800 min-w-0 break-words">{p.nome}</span>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 justify-between sm:justify-end">
+                          <span className="text-slate-600 tabular-nums text-xs sm:text-sm">
+                            {q} un.
+                            {unit != null && !Number.isNaN(unit) ? ` × R$ ${unit.toFixed(2)}` : ''}
+                            {sub != null ? <span className="font-semibold text-slate-800"> = R$ {sub.toFixed(2)}</span> : null}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removerItemOrcamento(i)}
+                            className="text-xs font-medium text-slate-500 hover:text-red-600 hover:underline shrink-0"
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
           </div>
-          <button type="submit" className="w-full rounded-lg bg-slate-900 text-white font-semibold py-2.5 text-sm">
+          <button
+            type="submit"
+            disabled={itensOrcamento.length === 0}
+            className="w-full rounded-lg bg-slate-900 text-white font-semibold py-2.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             Enviar orçamento ao motorista
           </button>
         </form>
@@ -271,7 +373,7 @@ export default function MecanicoChamadoModal({ solicitacao: s, onClose }) {
   })()
 
   return (
-    <Modal open={true} title={`OS — ${s.placa}`} onClose={onClose} wide>
+    <Modal open={true} title={modalTitle} onClose={onClose} wide>
       <div className="space-y-4">
         <p className="text-xs text-slate-500">
           Etapa: <span className="font-medium text-slate-700">{labelChamadoStatus(s.status)}</span>

@@ -6,6 +6,7 @@ import { apiLogin } from '../api.js'
 import { useAuth } from '../hooks/useAuth.js'
 import { defaultDashboardPath } from '../lib/dashboardPaths.js'
 import { inferRoleFromEmail } from '../lib/inferRole.js'
+import { getRegisteredRoleForEmail } from '../lib/localRegistry.js'
 
 const perfilOptions = [
   { value: 'auto', label: 'Detectar pelo e-mail' },
@@ -38,9 +39,11 @@ export default function LoginPage() {
     navigate(destinoPainel(fromDash, user.role), { replace: true })
   }, [isAuthenticated, user, fromDash, navigate])
 
-  const dicaInfer = email ? inferRoleFromEmail(email) : null
+  const dicaInfer = email ? getRegisteredRoleForEmail(email) || inferRoleFromEmail(email) : null
   const dicaLabel = dicaInfer
-    ? { motorista: 'Motorista', mecanico: 'Oficina', autopecas: 'Autopeças', seguradora: 'Seguradora' }[dicaInfer]
+    ? { motorista: 'Motorista', mecanico: 'Oficina / Mecânica', autopecas: 'Autopeças', seguradora: 'Seguradora' }[
+        dicaInfer
+      ]
     : ''
 
   async function handleSubmit(e) {
@@ -96,7 +99,8 @@ export default function LoginPage() {
                 </select>
                 {perfil === 'auto' && email && dicaLabel ? (
                   <p className="text-xs text-slate-500 mt-1.5">
-                    Domínio: <span className="font-medium text-slate-700">{dicaLabel}</span>
+                    {getRegisteredRoleForEmail(email) ? 'Perfil no cadastro' : 'Sugestão pelo domínio'}:{' '}
+                    <span className="font-medium text-slate-700">{dicaLabel}</span>
                   </p>
                 ) : null}
               </div>

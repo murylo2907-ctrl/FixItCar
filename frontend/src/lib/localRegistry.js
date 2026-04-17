@@ -10,6 +10,14 @@ export function loadRegisteredUsers() {
   }
 }
 
+/** Perfil salvo no cadastro local, se o e-mail existir. */
+export function getRegisteredRoleForEmail(email) {
+  const e = String(email || '').toLowerCase().trim()
+  if (!e) return null
+  const row = loadRegisteredUsers().find((u) => u.email === e)
+  return row?.role && typeof row.role === 'string' ? row.role : null
+}
+
 export function saveRegisteredUser({ nome, email, senha, role }) {
   const list = loadRegisteredUsers()
   const id = 10000 + Date.now() % 900000

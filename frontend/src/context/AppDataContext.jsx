@@ -1,4 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useAuth } from '../hooks/useAuth.js'
+import { fetchAppDataFromApi, pushAppDataToApi } from '../lib/apiClient.js'
 import { CHAMADO_STATUS } from '../lib/chamadoFlow.js'
 
 const SNAPSHOT_KEY = 'fixitcar_app_v1'
@@ -8,7 +10,7 @@ function newId() {
   return `id-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
-function normalizeSnapshot(raw) {
+export function normalizeSnapshot(raw) {
   return {
     solicitacoes: Array.isArray(raw?.solicitacoes) ? raw.solicitacoes : [],
     pedidos: Array.isArray(raw?.pedidos) ? raw.pedidos : [],
@@ -33,22 +35,73 @@ function persist(s) {
 const AppDataContext = createContext(null)
 
 export function AppDataProvider({ children }) {
+  const { token, isAuthenticated } = useAuth()
   const [snap, setSnap] = useState(() => load())
+  const snapRef = useRef(snap)
+  const remoteTimerRef = useRef(null)
+  snapRef.current = snap
+
+  useEffect(() => {
+    if (!isAuthenticated || !token) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await fetchAppDataFromApi(token)
+        if (cancelled || !data) return
+        const next = normalizeSnapshot(data)
+        setSnap(next)
+        persist(next)
+      } catch {
+        /* mantém localStorage */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isAuthenticated, token])
+
+  const scheduleRemotePersist = useCallback(
+    (nextSnap) => {
+      if (!token) return
+      if (remoteTimerRef.current) clearTimeout(remoteTimerRef.current)
+      remoteTimerRef.current = setTimeout(() => {
+        remoteTimerRef.current = null
+        pushAppDataToApi(nextSnap, token).catch(() => {})
+      }, 450)
+    },
+    [token]
+  )
 
   const syncAppData = useCallback(() => {
-    setSnap(load())
-  }, [])
+    const local = load()
+    setSnap(local)
+    if (!token) return
+    fetchAppDataFromApi(token)
+      .then((data) => {
+        if (data && typeof data === 'object') {
+          const next = normalizeSnapshot(data)
+          setSnap(next)
+          persist(next)
+        }
+      })
+      .catch(() => {})
+  }, [token])
 
-  const commit = useCallback((updater) => {
-    setSnap((prev) => {
-      const next = typeof updater === 'function' ? updater(prev) : updater
-      persist(next)
-      return next
-    })
-  }, [])
+  const commit = useCallback(
+    (updater) => {
+      setSnap((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater
+        persist(next)
+        snapRef.current = next
+        scheduleRemotePersist(next)
+        return next
+      })
+    },
+    [scheduleRemotePersist]
+  )
 
   const criarChamado = useCallback(
-    (motoristaId, { placa, descricao, modelo, usaSeguro }) => {
+    (motoristaId, { placa, descricao, modelo, usaSeguro, motoristaNome }) => {
       const p = String(placa || '').trim()
       const d = String(descricao || '').trim()
       if (!p || !d) return null
@@ -56,11 +109,13 @@ export function AppDataProvider({ children }) {
       const row = {
         id: newId(),
         motoristaId: Number(motoristaId),
+        motoristaNome: String(motoristaNome || '').trim(),
         placa: p.toUpperCase(),
         modelo: String(modelo || '').trim(),
         descricao: d,
         usaSeguro: Boolean(usaSeguro),
-        status: usaSeguro ? CHAMADO_STATUS.PENDENTE_MECANICO_SEGURO : CHAMADO_STATUS.PENDENTE_MECANICO,
+        /** Com seguro: vai direto à seguradora (fluxo acordado). Sem seguro: entrada na oficina. */
+        status: usaSeguro ? CHAMADO_STATUS.ENVIADO_PARA_SEGURADORA : CHAMADO_STATUS.PENDENTE_MECANICO,
         seguradoraLiberouOficina: false,
         descricaoMecanico: '',
         pecasSugeridas: [],
@@ -115,8 +170,12 @@ export function AppDataProvider({ children }) {
       const now = new Date().toISOString()
       commit((s) => ({
         ...s,
-        solicitacoes: s.solicitacoes.map((x) =>
-          x.id === solicitacaoId && x.status === CHAMADO_STATUS.ENVIADO_PARA_SEGURADORA
+        solicitacoes: s.solicitacoes.map((x) => {
+          const podeEncaminhar =
+            x.id === solicitacaoId &&
+            (x.status === CHAMADO_STATUS.ENVIADO_PARA_SEGURADORA ||
+              (x.usaSeguro && x.status === CHAMADO_STATUS.PENDENTE_MECANICO_SEGURO))
+          return podeEncaminhar
             ? {
                 ...x,
                 status: CHAMADO_STATUS.EM_ANALISE_MECANICO,
@@ -124,7 +183,7 @@ export function AppDataProvider({ children }) {
                 updatedAt: now,
               }
             : x
-        ),
+        }),
       }))
     },
     [commit]
@@ -135,37 +194,45 @@ export function AppDataProvider({ children }) {
       const now = new Date().toISOString()
       commit((s) => ({
         ...s,
-        solicitacoes: s.solicitacoes.map((x) =>
-          x.id === solicitacaoId && x.status === CHAMADO_STATUS.ENVIADO_PARA_SEGURADORA
-            ? { ...x, status: CHAMADO_STATUS.FINALIZADO_PELA_SEGURADORA, updatedAt: now }
-            : x
-        ),
+        solicitacoes: s.solicitacoes.map((x) => {
+          const podeFinalizar =
+            x.id === solicitacaoId &&
+            (x.status === CHAMADO_STATUS.ENVIADO_PARA_SEGURADORA ||
+              (x.usaSeguro && x.status === CHAMADO_STATUS.PENDENTE_MECANICO_SEGURO))
+          return podeFinalizar ? { ...x, status: CHAMADO_STATUS.FINALIZADO_PELA_SEGURADORA, updatedAt: now } : x
+        }),
       }))
     },
     [commit]
   )
 
-  const enviarAvisoSeguradoraParaMotorista = useCallback((solicitacaoId, { seguradoraId, seguradoraNome, texto }) => {
-    const t = String(texto || '').trim()
-    if (t.length < 15) return false
-    const now = new Date().toISOString()
-    const aviso = {
-      id: newId(),
-      solicitacaoId,
-      seguradoraId: Number(seguradoraId),
-      seguradoraNome: String(seguradoraNome || '').trim() || 'Seguradora',
-      texto: t,
-      createdAt: now,
-    }
-    let ok = false
-    commit((s) => {
-      const sol = s.solicitacoes.find((x) => x.id === solicitacaoId)
-      if (!sol || sol.status !== CHAMADO_STATUS.ENVIADO_PARA_SEGURADORA) return s
-      ok = true
-      return { ...s, avisosMotorista: [aviso, ...s.avisosMotorista] }
-    })
-    return ok
-  }, [commit])
+  const enviarAvisoSeguradoraParaMotorista = useCallback(
+    (solicitacaoId, { seguradoraId, seguradoraNome, texto }) => {
+      const t = String(texto || '').trim()
+      if (t.length < 15) return false
+      const now = new Date().toISOString()
+      const aviso = {
+        id: newId(),
+        solicitacaoId,
+        seguradoraId: Number(seguradoraId),
+        seguradoraNome: String(seguradoraNome || '').trim() || 'Seguradora',
+        texto: t,
+        createdAt: now,
+      }
+      let ok = false
+      commit((s) => {
+        const sol = s.solicitacoes.find((x) => x.id === solicitacaoId)
+        const podeAvisoSeguro =
+          sol?.status === CHAMADO_STATUS.ENVIADO_PARA_SEGURADORA ||
+          (sol?.usaSeguro && sol?.status === CHAMADO_STATUS.PENDENTE_MECANICO_SEGURO)
+        if (!sol || !podeAvisoSeguro) return s
+        ok = true
+        return { ...s, avisosMotorista: [aviso, ...s.avisosMotorista] }
+      })
+      return ok
+    },
+    [commit]
+  )
 
   const cadastrarVeiculoSeguradora = useCallback(
     (seguradoraId, { modelo, placa, ano, valorSeguro }) => {
@@ -204,10 +271,12 @@ export function AppDataProvider({ children }) {
     [commit]
   )
 
-  /** Oficina: triagem recebida */
   const mecanicoConfirmarTriagem = useCallback(
-    (solicitacaoId) => {
+    (solicitacaoId, { mecanicoId, mecanicoNome } = {}) => {
       const now = new Date().toISOString()
+      const midRaw = mecanicoId != null ? Number(mecanicoId) : NaN
+      const mid = Number.isFinite(midRaw) ? midRaw : null
+      const nomeOficina = String(mecanicoNome || '').trim() || 'Oficina'
       commit((s) => ({
         ...s,
         solicitacoes: s.solicitacoes.map((x) => {
@@ -215,7 +284,19 @@ export function AppDataProvider({ children }) {
           const ok =
             x.status === CHAMADO_STATUS.PENDENTE_MECANICO || x.status === CHAMADO_STATUS.PENDENTE_MECANICO_SEGURO
           if (!ok) return x
-          return { ...x, status: CHAMADO_STATUS.EM_ANALISE_MECANICO, updatedAt: now }
+          const already = x.mecanicoId != null && x.mecanicoId !== ''
+          if (already && mid != null && Number(x.mecanicoId) !== mid) return x
+          return {
+            ...x,
+            status: CHAMADO_STATUS.EM_ANALISE_MECANICO,
+            updatedAt: now,
+            ...(!already && mid != null
+              ? {
+                  mecanicoId: mid,
+                  mecanicoNome: nomeOficina,
+                }
+              : {}),
+          }
         }),
       }))
     },
@@ -317,6 +398,19 @@ export function AppDataProvider({ children }) {
     [commit]
   )
 
+  const marcarAvisoMotoristaComoLido = useCallback(
+    (avisoId) => {
+      const now = new Date().toISOString()
+      commit((s) => ({
+        ...s,
+        avisosMotorista: s.avisosMotorista.map((a) =>
+          a.id === avisoId ? { ...a, lida: true, lidaAt: now } : a
+        ),
+      }))
+    },
+    [commit]
+  )
+
   const value = useMemo(
     () => ({
       solicitacoes: snap.solicitacoes,
@@ -337,6 +431,7 @@ export function AppDataProvider({ children }) {
       mecanicoRegistrarOrcamento,
       mecanicoGerarPedidosCotacao,
       mecanicoConcluirServico,
+      marcarAvisoMotoristaComoLido,
     }),
     [
       snap,
@@ -354,6 +449,7 @@ export function AppDataProvider({ children }) {
       mecanicoRegistrarOrcamento,
       mecanicoGerarPedidosCotacao,
       mecanicoConcluirServico,
+      marcarAvisoMotoristaComoLido,
     ]
   )
 

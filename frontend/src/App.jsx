@@ -20,10 +20,12 @@ import SolicitarPecasPage from './pages/dashboard/oficina/SolicitarPecasPage.jsx
 import MeuPerfilOficinaPage from './pages/dashboard/oficina/MeuPerfilOficinaPage.jsx'
 import CotacoesRecebidasPage from './pages/dashboard/autopecas/CotacoesRecebidasPage.jsx'
 import PedidosVendidosPage from './pages/dashboard/autopecas/PedidosVendidosPage.jsx'
+import MeuPerfilAutopecasPage from './pages/dashboard/autopecas/MeuPerfilAutopecasPage.jsx'
 import SinistrosAnalisePage from './pages/dashboard/seguradora/SinistrosAnalisePage.jsx'
 import AprovacoesSeguradoraPage from './pages/dashboard/seguradora/AprovacoesSeguradoraPage.jsx'
 import CadastroVeiculosSeguradoraPage from './pages/dashboard/seguradora/CadastroVeiculosSeguradoraPage.jsx'
 import HistoricoSinistrosSeguradoraPage from './pages/dashboard/seguradora/HistoricoSinistrosSeguradoraPage.jsx'
+import MeuPerfilSeguradoraPage from './pages/dashboard/seguradora/MeuPerfilSeguradoraPage.jsx'
 
 export default function App() {
   return (
@@ -50,10 +52,12 @@ export default function App() {
               <Route path="oficina/perfil" element={<MeuPerfilOficinaPage />} />
               <Route path="autopecas/cotacoes" element={<CotacoesRecebidasPage />} />
               <Route path="autopecas/vendidos" element={<PedidosVendidosPage />} />
+              <Route path="autopecas/perfil" element={<MeuPerfilAutopecasPage />} />
               <Route path="seguradora/sinistros" element={<SinistrosAnalisePage />} />
               <Route path="seguradora/aprovacoes" element={<AprovacoesSeguradoraPage />} />
               <Route path="seguradora/cadastro-veiculos" element={<CadastroVeiculosSeguradoraPage />} />
               <Route path="seguradora/historico" element={<HistoricoSinistrosSeguradoraPage />} />
+              <Route path="seguradora/perfil" element={<MeuPerfilSeguradoraPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

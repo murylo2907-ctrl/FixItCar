@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { UserCircle } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth.js'
+import { fetchPerfilFromApi, getStoredToken, pushPerfilToApi } from '../../../lib/apiClient.js'
 import { loadMecanicoPerfil, saveMecanicoPerfil } from '../../../lib/mecanicoPerfil.js'
+import PerfilEmailReadonly from '../../../components/dashboard/PerfilEmailReadonly.jsx'
 
 const UFS = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA',
@@ -81,9 +83,37 @@ export default function MeuPerfilOficinaPage() {
     setEnderecoOficina(p.enderecoOficina || '')
     setServicosEspecializacao(p.servicosEspecializacao || '')
     setDescricaoOficina(p.descricaoOficina || '')
+    let cancelled = false
+    const t = getStoredToken()
+    if (!t) return undefined
+    ;(async () => {
+      try {
+        const remote = await fetchPerfilFromApi(t)
+        if (cancelled || !remote || typeof remote !== 'object') return
+        const m = { ...p, ...remote }
+        if (m.nome) setNome(String(m.nome))
+        if (m.cpf) setCpf(formatCpf(onlyDigits(m.cpf)))
+        if (m.telefone) setTelefone(formatTel(onlyDigits(m.telefone)))
+        if (m.dataNascimento) setDataNascimento(String(m.dataNascimento))
+        if (m.localizacao) setLocalizacao(String(m.localizacao))
+        if (m.cidade) setCidade(String(m.cidade))
+        if (m.estado) setEstado(String(m.estado))
+        if (m.nomeOficina) setNomeOficina(String(m.nomeOficina))
+        if (m.anoFundacao != null && m.anoFundacao !== '') setAnoFundacao(String(m.anoFundacao))
+        if (m.cnpj) setCnpj(formatCnpj(onlyDigits(m.cnpj)))
+        if (m.enderecoOficina) setEnderecoOficina(String(m.enderecoOficina))
+        if (m.servicosEspecializacao) setServicosEspecializacao(String(m.servicosEspecializacao))
+        if (m.descricaoOficina) setDescricaoOficina(String(m.descricaoOficina))
+      } catch {
+        /* mantém local */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [user?.id, user?.nome])
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     setErro('')
     setOk(false)
@@ -172,7 +202,13 @@ export default function MeuPerfilOficinaPage() {
     }
 
     saveMecanicoPerfil(user.id, payload)
-    updateUser(payload)
+    updateUser({ nome: nomeTrim })
+    try {
+      const tok = getStoredToken()
+      if (tok) await pushPerfilToApi(payload, tok)
+    } catch {
+      /* offline */
+    }
     setOk(true)
   }
 
@@ -207,21 +243,7 @@ export default function MeuPerfilOficinaPage() {
                 autoComplete="name"
               />
             </div>
-            <div>
-              <label htmlFor="perfil-of-email" className="block text-xs font-medium text-slate-600 mb-1">
-                E-mail
-              </label>
-              <input
-                id="perfil-of-email"
-                type="email"
-                value={user?.email ?? ''}
-                readOnly
-                aria-readonly="true"
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 cursor-default"
-                autoComplete="email"
-              />
-              <p className="mt-1 text-xs text-slate-500">Preenchido automaticamente com o e-mail da sua conta de login.</p>
-            </div>
+            <PerfilEmailReadonly id="perfil-of-email" email={user?.email} role={user?.role} />
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
               <div>
                 <label htmlFor="perfil-of-cpf" className="block text-xs font-medium text-slate-600 mb-1">
@@ -258,6 +280,7 @@ export default function MeuPerfilOficinaPage() {
               <div>
                 <label htmlFor="perfil-of-nasc" className="block text-xs font-medium text-slate-600 mb-1">
                   Data de nascimento
+                  <ReqMark />
                 </label>
                 <input
                   id="perfil-of-nasc"

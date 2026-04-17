@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { UserCircle } from 'lucide-react'
 import { useAuth } from '../../../hooks/useAuth.js'
 import { fetchPerfilFromApi, getStoredToken, pushPerfilToApi } from '../../../lib/apiClient.js'
-import { loadMotoristaPerfil, saveMotoristaPerfil } from '../../../lib/motoristaPerfil.js'
+import { loadAutopecasPerfil, saveAutopecasPerfil } from '../../../lib/autopecasPerfil.js'
 import PerfilEmailReadonly from '../../../components/dashboard/PerfilEmailReadonly.jsx'
 
 const UFS = [
@@ -14,12 +14,13 @@ function onlyDigits(s) {
   return String(s || '').replace(/\D/g, '')
 }
 
-function formatCpf(digits) {
-  const d = digits.slice(0, 11)
-  if (d.length <= 3) return d
-  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`
-  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`
-  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
+function formatCnpj(digits) {
+  const d = digits.slice(0, 14)
+  if (d.length <= 2) return d
+  if (d.length <= 5) return `${d.slice(0, 2)}.${d.slice(2)}`
+  if (d.length <= 8) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`
+  if (d.length <= 12) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`
 }
 
 function formatTel(digits) {
@@ -38,28 +39,33 @@ function ReqMark() {
   )
 }
 
-export default function MeuPerfilMotoristaPage() {
+export default function MeuPerfilAutopecasPage() {
   const { user, updateUser } = useAuth()
-  const [nome, setNome] = useState('')
-  const [cpf, setCpf] = useState('')
+  const [nomeFantasia, setNomeFantasia] = useState('')
+  const [razaoSocial, setRazaoSocial] = useState('')
+  const [cnpj, setCnpj] = useState('')
   const [telefone, setTelefone] = useState('')
-  const [dataNascimento, setDataNascimento] = useState('')
-  const [localizacao, setLocalizacao] = useState('')
+  const [endereco, setEndereco] = useState('')
   const [cidade, setCidade] = useState('')
   const [estado, setEstado] = useState('')
+  const [atuacao, setAtuacao] = useState('')
   const [erro, setErro] = useState('')
   const [ok, setOk] = useState(false)
 
+  function aplicarPerfil(p) {
+    setNomeFantasia(String(p.nomeFantasia || '').trim())
+    setRazaoSocial(String(p.razaoSocial || '').trim())
+    setCnpj(p.cnpj ? formatCnpj(onlyDigits(p.cnpj)) : '')
+    setTelefone(p.telefone ? formatTel(onlyDigits(p.telefone)) : '')
+    setEndereco(String(p.endereco || '').trim())
+    setCidade(String(p.cidade || '').trim())
+    setEstado(String(p.estado || '').trim())
+    setAtuacao(String(p.atuacao || '').trim())
+  }
+
   useEffect(() => {
     if (!user?.id) return
-    const p = loadMotoristaPerfil(user.id)
-    setNome(p.nome || user.nome || '')
-    setCpf(p.cpf ? formatCpf(onlyDigits(p.cpf)) : '')
-    setTelefone(p.telefone ? formatTel(onlyDigits(p.telefone)) : '')
-    setDataNascimento(p.dataNascimento || '')
-    setLocalizacao(p.localizacao || '')
-    setCidade(p.cidade || '')
-    setEstado(p.estado || '')
+    aplicarPerfil(loadAutopecasPerfil(user.id))
     let cancelled = false
     const t = getStoredToken()
     if (!t) return undefined
@@ -67,14 +73,13 @@ export default function MeuPerfilMotoristaPage() {
       try {
         const remote = await fetchPerfilFromApi(t)
         if (cancelled || !remote || typeof remote !== 'object') return
-        const merged = { ...p, ...remote }
-        if (merged.nome) setNome(String(merged.nome))
-        if (merged.cpf) setCpf(formatCpf(onlyDigits(merged.cpf)))
-        if (merged.telefone) setTelefone(formatTel(onlyDigits(merged.telefone)))
-        if (merged.dataNascimento) setDataNascimento(String(merged.dataNascimento))
-        if (merged.localizacao) setLocalizacao(String(merged.localizacao))
-        if (merged.cidade) setCidade(String(merged.cidade))
-        if (merged.estado) setEstado(String(merged.estado))
+        const has =
+          remote.nomeFantasia ||
+          remote.razaoSocial ||
+          remote.cnpj ||
+          remote.telefone ||
+          remote.endereco
+        if (has) aplicarPerfil({ ...loadAutopecasPerfil(user.id), ...remote })
       } catch {
         /* mantém local */
       }
@@ -82,40 +87,42 @@ export default function MeuPerfilMotoristaPage() {
     return () => {
       cancelled = true
     }
-  }, [user?.id, user?.nome])
+  }, [user?.id])
 
   async function handleSubmit(e) {
     e.preventDefault()
     setErro('')
     setOk(false)
 
-    const nomeTrim = nome.trim()
-    const cpfDigits = onlyDigits(cpf)
+    const nf = nomeFantasia.trim()
+    const rz = razaoSocial.trim()
+    const cnpjDigits = onlyDigits(cnpj)
     const telDigits = onlyDigits(telefone)
-    const locTrim = localizacao.trim()
-    const cidadeTrim = cidade.trim()
+    const endTrim = endereco.trim()
+    const cid = cidade.trim()
+    const at = atuacao.trim()
 
-    if (!nomeTrim) {
-      setErro('Informe o nome.')
+    if (!nf) {
+      setErro('Informe o nome fantasia.')
       return
     }
-    if (cpfDigits.length !== 11) {
-      setErro('Informe um CPF válido (11 dígitos).')
+    if (!rz) {
+      setErro('Informe a razão social.')
+      return
+    }
+    if (cnpjDigits.length !== 14) {
+      setErro('Informe um CNPJ válido (14 dígitos).')
       return
     }
     if (telDigits.length < 10 || telDigits.length > 11) {
       setErro('Informe um telefone com DDD (10 ou 11 dígitos).')
       return
     }
-    if (!dataNascimento) {
-      setErro('Informe a data de nascimento.')
+    if (!endTrim) {
+      setErro('Informe o endereço.')
       return
     }
-    if (!locTrim) {
-      setErro('Informe a localização (bairro, endereço ou referência).')
-      return
-    }
-    if (!cidadeTrim) {
+    if (!cid) {
       setErro('Informe a cidade.')
       return
     }
@@ -123,24 +130,29 @@ export default function MeuPerfilMotoristaPage() {
       setErro('Selecione o estado (UF).')
       return
     }
-
-    const payload = {
-      nome: nomeTrim,
-      cpf: formatCpf(cpfDigits),
-      telefone: formatTel(telDigits),
-      dataNascimento,
-      localizacao: locTrim,
-      cidade: cidadeTrim,
-      estado,
+    if (!at) {
+      setErro('Informe a área de atuação / especialidade.')
+      return
     }
 
-    saveMotoristaPerfil(user.id, payload)
-    updateUser(payload)
+    const payload = {
+      nomeFantasia: nf,
+      razaoSocial: rz,
+      cnpj: formatCnpj(cnpjDigits),
+      telefone: formatTel(telDigits),
+      endereco: endTrim,
+      cidade: cid,
+      estado,
+      atuacao: at,
+    }
+
+    saveAutopecasPerfil(user.id, payload)
+    updateUser({ nome: nf })
     try {
       const tok = getStoredToken()
       if (tok) await pushPerfilToApi(payload, tok)
     } catch {
-      /* offline */
+      /* offline / API fora */
     }
     setOk(true)
   }
@@ -154,110 +166,105 @@ export default function MeuPerfilMotoristaPage() {
         </div>
       </div>
       <p className="text-sm text-slate-600 mb-4 shrink-0 w-full">
-        Preencha seus dados para que oficinas e a seguradora possam contatá-lo com segurança quando necessário.
+        Dados da loja para oficinas e motoristas identificarem sua autopeças com segurança.
       </p>
 
       <section className="flex-1 flex flex-col w-full min-w-0 rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-4 sm:px-6 py-3 border-b border-slate-100 bg-slate-50/80 shrink-0">
-          <h2 className="text-sm font-semibold text-slate-800">Dados pessoais</h2>
+          <h2 className="text-sm font-semibold text-slate-800">Dados da empresa</h2>
         </div>
         <form onSubmit={handleSubmit} className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-5 flex-1 flex flex-col w-full min-w-0">
           <div>
-            <label htmlFor="perfil-nome" className="block text-xs font-medium text-slate-600 mb-1">
-              Nome completo
+            <label htmlFor="ap-nf" className="block text-xs font-medium text-slate-600 mb-1">
+              Nome fantasia
               <ReqMark />
             </label>
             <input
-              id="perfil-nome"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
+              id="ap-nf"
+              value={nomeFantasia}
+              onChange={(e) => setNomeFantasia(e.target.value)}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              autoComplete="name"
+              autoComplete="organization"
             />
           </div>
-          <PerfilEmailReadonly id="perfil-email" email={user?.email} role={user?.role} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+          <div>
+            <label htmlFor="ap-rz" className="block text-xs font-medium text-slate-600 mb-1">
+              Razão social
+              <ReqMark />
+            </label>
+            <input
+              id="ap-rz"
+              value={razaoSocial}
+              onChange={(e) => setRazaoSocial(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            />
+          </div>
+          <PerfilEmailReadonly id="ap-email" email={user?.email} role={user?.role} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
             <div>
-              <label htmlFor="perfil-cpf" className="block text-xs font-medium text-slate-600 mb-1">
-                CPF
+              <label htmlFor="ap-cnpj" className="block text-xs font-medium text-slate-600 mb-1">
+                CNPJ
                 <ReqMark />
               </label>
               <input
-                id="perfil-cpf"
-                value={cpf}
-                onChange={(e) => setCpf(formatCpf(onlyDigits(e.target.value)))}
+                id="ap-cnpj"
+                value={cnpj}
+                onChange={(e) => setCnpj(formatCnpj(onlyDigits(e.target.value)))}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono"
                 inputMode="numeric"
-                placeholder="000.000.000-00"
-                maxLength={14}
-                autoComplete="off"
+                placeholder="00.000.000/0000-00"
+                maxLength={18}
               />
             </div>
             <div>
-              <label htmlFor="perfil-tel" className="block text-xs font-medium text-slate-600 mb-1">
+              <label htmlFor="ap-tel" className="block text-xs font-medium text-slate-600 mb-1">
                 Telefone
                 <ReqMark />
               </label>
               <input
-                id="perfil-tel"
+                id="ap-tel"
                 value={telefone}
                 onChange={(e) => setTelefone(formatTel(onlyDigits(e.target.value)))}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono"
                 inputMode="tel"
                 placeholder="(00) 00000-0000"
                 maxLength={16}
-                autoComplete="tel"
-              />
-            </div>
-            <div>
-              <label htmlFor="perfil-nasc" className="block text-xs font-medium text-slate-600 mb-1">
-                Data de nascimento
-                <ReqMark />
-              </label>
-              <input
-                id="perfil-nasc"
-                type="date"
-                value={dataNascimento}
-                onChange={(e) => setDataNascimento(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm min-h-[2.5rem]"
               />
             </div>
           </div>
           <div>
-            <label htmlFor="perfil-loc" className="block text-xs font-medium text-slate-600 mb-1">
-              Localização
+            <label htmlFor="ap-end" className="block text-xs font-medium text-slate-600 mb-1">
+              Endereço
               <ReqMark />
             </label>
             <input
-              id="perfil-loc"
-              value={localizacao}
-              onChange={(e) => setLocalizacao(e.target.value)}
+              id="ap-end"
+              value={endereco}
+              onChange={(e) => setEndereco(e.target.value)}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              placeholder="Bairro, rua ou ponto de referência"
-              autoComplete="street-address"
+              placeholder="Rua, número, bairro, CEP"
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
             <div>
-              <label htmlFor="perfil-cidade" className="block text-xs font-medium text-slate-600 mb-1">
+              <label htmlFor="ap-cid" className="block text-xs font-medium text-slate-600 mb-1">
                 Cidade
                 <ReqMark />
               </label>
               <input
-                id="perfil-cidade"
+                id="ap-cid"
                 value={cidade}
                 onChange={(e) => setCidade(e.target.value)}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                autoComplete="address-level2"
               />
             </div>
             <div>
-              <label htmlFor="perfil-uf" className="block text-xs font-medium text-slate-600 mb-1">
+              <label htmlFor="ap-uf" className="block text-xs font-medium text-slate-600 mb-1">
                 Estado (UF)
                 <ReqMark />
               </label>
               <select
-                id="perfil-uf"
+                id="ap-uf"
                 value={estado}
                 onChange={(e) => setEstado(e.target.value)}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white"
@@ -270,6 +277,20 @@ export default function MeuPerfilMotoristaPage() {
                 ))}
               </select>
             </div>
+          </div>
+          <div>
+            <label htmlFor="ap-atu" className="block text-xs font-medium text-slate-600 mb-1">
+              Área de atuação
+              <ReqMark />
+            </label>
+            <textarea
+              id="ap-atu"
+              value={atuacao}
+              onChange={(e) => setAtuacao(e.target.value)}
+              rows={4}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm resize-y min-h-[5rem]"
+              placeholder="Ex.: peças originais, funilaria, elétrica, motores…"
+            />
           </div>
 
           {erro ? <p className="text-sm text-red-600">{erro}</p> : null}

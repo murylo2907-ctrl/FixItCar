@@ -13,7 +13,12 @@ export default function Modal({ open, title, onClose, children, wide }) {
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
       <button
         type="button"
         className="absolute inset-0 bg-slate-900/50"
@@ -23,8 +28,14 @@ export default function Modal({ open, title, onClose, children, wide }) {
       <div
         className={`relative z-10 w-full ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[90vh] overflow-y-auto rounded-xl bg-white border border-slate-200 shadow-xl`}
       >
-        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-900">{title}</h2>
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100">
+          <div id="modal-title" className="min-w-0 flex-1 pr-2">
+            {typeof title === 'string' ? (
+              <h2 className="text-lg font-bold text-slate-900 leading-tight">{title}</h2>
+            ) : (
+              title
+            )}
+          </div>
           <button
             type="button"
             onClick={onClose}

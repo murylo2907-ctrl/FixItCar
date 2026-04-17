@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import Modal from '../../../components/ui/Modal.jsx'
 import { useAuth } from '../../../hooks/useAuth.js'
 import { useAppData } from '../../../hooks/useAppData.js'
 import { CHAMADO_STATUS, labelChamadoStatus, progressoMotoristaChamado } from '../../../lib/chamadoFlow.js'
+import { loadMotoristaPerfil, motoristaPerfilCompletoParaChamado } from '../../../lib/motoristaPerfil.js'
 
 export default function MeusCarrosPage() {
   const { user } = useAuth()
@@ -18,6 +20,8 @@ export default function MeusCarrosPage() {
     .filter((s) => Number(s.motoristaId) === Number(user?.id))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
 
+  const perfilParaChamado = motoristaPerfilCompletoParaChamado(user?.id, user)
+
   useEffect(() => {
     syncAppData()
     function onFocus() {
@@ -30,12 +34,19 @@ export default function MeusCarrosPage() {
   function abrirChamado(e) {
     e.preventDefault()
     setErro('')
+    const perfil = motoristaPerfilCompletoParaChamado(user.id, user)
+    if (!perfil.ok) {
+      setErro(perfil.message)
+      return
+    }
     if (possuiSeguro !== 'sim' && possuiSeguro !== 'nao') {
       setErro('Indique se possui seguro (Sim ou Não).')
       return
     }
     const usaSeguro = possuiSeguro === 'sim'
-    const s = criarChamado(user.id, { placa, descricao, modelo, usaSeguro })
+    const perfilNome = String(loadMotoristaPerfil(user.id).nome || '').trim()
+    const motoristaNome = String(user.nome || perfilNome || '').trim()
+    const s = criarChamado(user.id, { placa, descricao, modelo, usaSeguro, motoristaNome })
     if (!s) {
       setErro('Informe a placa e a descrição.')
       return
@@ -53,12 +64,34 @@ export default function MeusCarrosPage() {
         <h1 className="text-xl font-bold text-slate-900 tracking-tight">Meus carros</h1>
         <button
           type="button"
-          onClick={() => setModal(true)}
-          className="rounded-lg bg-brand-rose text-slate-900 font-semibold text-sm px-5 py-2.5 shadow-sm ring-1 ring-brand-rose-deep/30 hover:bg-brand-rose-deep/90 shrink-0"
+          disabled={!perfilParaChamado.ok}
+          title={
+            perfilParaChamado.ok
+              ? 'Abrir novo chamado'
+              : 'Complete os dados obrigatórios em Meu perfil para abrir um chamado.'
+          }
+          onClick={() => {
+            if (!motoristaPerfilCompletoParaChamado(user.id, user).ok) return
+            setModal(true)
+          }}
+          className="rounded-lg bg-brand-rose text-slate-900 font-semibold text-sm px-5 py-2.5 shadow-sm ring-1 ring-brand-rose-deep/30 hover:bg-brand-rose-deep/90 shrink-0 disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed"
         >
           Abrir chamado
         </button>
       </div>
+
+      {!perfilParaChamado.ok ? (
+        <div className="mb-6 rounded-xl border border-amber-200/90 bg-amber-50/90 px-4 py-3 sm:px-5 sm:py-4 text-sm text-amber-950 shadow-sm">
+          <p className="font-medium text-amber-900">Perfil incompleto</p>
+          <p className="mt-1 text-amber-900/90 leading-relaxed">{perfilParaChamado.message}</p>
+          <Link
+            to="/dashboard/motorista/perfil"
+            className="mt-3 inline-flex text-sm font-semibold text-brand-cyan-deep hover:underline"
+          >
+            Ir para Meu perfil
+          </Link>
+        </div>
+      ) : null}
 
       <section className="rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/80">

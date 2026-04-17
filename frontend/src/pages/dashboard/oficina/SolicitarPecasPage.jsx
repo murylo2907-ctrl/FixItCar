@@ -1,14 +1,25 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useAppData } from '../../../hooks/useAppData.js'
+import { useAuth } from '../../../hooks/useAuth.js'
+import { solicitacaoVisivelParaMecanico } from '../../../lib/mecanicoSolicitacaoFilter.js'
 
 export default function SolicitarPecasPage() {
-  const { pedidos, syncAppData } = useAppData()
+  const { user } = useAuth()
+  const { pedidos, solicitacoes, syncAppData } = useAppData()
 
   useEffect(() => {
     syncAppData()
   }, [syncAppData])
+
+  const solById = useMemo(() => Object.fromEntries(solicitacoes.map((s) => [s.id, s])), [solicitacoes])
+
   const pendentes = pedidos
     .filter((p) => p.status === 'pendente' && p.solicitacaoId)
+    .filter((p) => {
+      const sol = solById[p.solicitacaoId]
+      if (!sol) return false
+      return solicitacaoVisivelParaMecanico(sol, user?.id)
+    })
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
 
   return (
