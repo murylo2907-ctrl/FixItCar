@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Navigate } from 'react-router-dom'
-import { Users, Warehouse, Package, Landmark } from 'lucide-react'
+import { Users, Warehouse, Package, Landmark, MessageSquare } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth.js'
 import { servicoLabelForRole } from '../../lib/perfilTipoConta.js'
 
@@ -8,6 +8,7 @@ const adminNav = [
   { to: '/dashboard/admin/mecanicos', label: 'Oficina / Mecânica', icon: Warehouse },
   { to: '/dashboard/admin/autopecas', label: 'Autopeças', icon: Package },
   { to: '/dashboard/admin/seguradoras', label: 'Seguradoras', icon: Landmark },
+  { to: '/dashboard/admin/mensagens', label: 'Mensagens', icon: MessageSquare },
 ]
 
 const adminLinkCls = ({ isActive }) =>

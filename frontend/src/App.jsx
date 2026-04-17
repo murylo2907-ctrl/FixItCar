@@ -27,6 +27,7 @@ import CadastroVeiculosSeguradoraPage from './pages/dashboard/seguradora/Cadastr
 import HistoricoSinistrosSeguradoraPage from './pages/dashboard/seguradora/HistoricoSinistrosSeguradoraPage.jsx'
 import MeuPerfilSeguradoraPage from './pages/dashboard/seguradora/MeuPerfilSeguradoraPage.jsx'
 import AdminUsuariosPorPerfilPage from './pages/dashboard/admin/AdminUsuariosPorPerfilPage.jsx'
+import AdminMensagensPage from './pages/dashboard/admin/AdminMensagensPage.jsx'
 
 export default function App() {
   return (
@@ -61,6 +62,7 @@ export default function App() {
               <Route path="seguradora/perfil" element={<MeuPerfilSeguradoraPage />} />
               <Route path="admin" element={<Outlet />}>
                 <Route index element={<Navigate to="motoristas" replace />} />
+                <Route path="mensagens" element={<AdminMensagensPage />} />
                 <Route path=":modulo" element={<AdminUsuariosPorPerfilPage />} />
               </Route>
             </Route>
