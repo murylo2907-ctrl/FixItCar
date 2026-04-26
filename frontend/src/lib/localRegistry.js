@@ -37,7 +37,7 @@ export function saveRegisteredUser({ nome, email, senha, role }) {
     id,
     nome: String(nome || '').trim(),
     email: String(email || '').toLowerCase().trim(),
-    senha: String(senha),
+    senha: String(senha).trim(),
     role,
   }
   if (!row.nome || !row.email || !row.senha || !row.role) return { ok: false, message: 'Preencha todos os campos.' }
@@ -122,6 +122,22 @@ export function ensureSeedAdministrador() {
     email,
     senha: '@admim',
     role: ROLE_ADMIN,
+  })
+  persist(list)
+}
+
+/** Demo: conta Autopeças com e-mail pessoal (Gmail não infere perfil). */
+export function ensureSeedAutopcsDemo() {
+  const email = 'pedro@gmail.com'
+  const list = loadRegisteredUsers()
+  if (list.some((u) => u.email === email)) return
+  const maxId = list.reduce((m, u) => Math.max(m, Number(u.id) || 0), 0)
+  list.push({
+    id: maxId + 1,
+    nome: 'Pedro',
+    email,
+    senha: '123456789',
+    role: 'autopecas',
   })
   persist(list)
 }

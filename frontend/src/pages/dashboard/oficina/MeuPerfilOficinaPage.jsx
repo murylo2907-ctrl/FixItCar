@@ -64,6 +64,9 @@ export default function MeuPerfilOficinaPage() {
   const [enderecoOficina, setEnderecoOficina] = useState('')
   const [servicosEspecializacao, setServicosEspecializacao] = useState('')
   const [descricaoOficina, setDescricaoOficina] = useState('')
+  const [fornecedoresParceiros, setFornecedoresParceiros] = useState('')
+  const [chavePix, setChavePix] = useState('')
+  const [bancoRecebimento, setBancoRecebimento] = useState('')
   const [erro, setErro] = useState('')
   const [ok, setOk] = useState(false)
 
@@ -83,6 +86,9 @@ export default function MeuPerfilOficinaPage() {
     setEnderecoOficina(p.enderecoOficina || '')
     setServicosEspecializacao(p.servicosEspecializacao || '')
     setDescricaoOficina(p.descricaoOficina || '')
+    setFornecedoresParceiros(p.fornecedoresParceiros || '')
+    setChavePix(p.chavePix || '')
+    setBancoRecebimento(p.bancoRecebimento || '')
     let cancelled = false
     const t = getStoredToken()
     if (!t) return undefined
@@ -104,6 +110,9 @@ export default function MeuPerfilOficinaPage() {
         if (m.enderecoOficina) setEnderecoOficina(String(m.enderecoOficina))
         if (m.servicosEspecializacao) setServicosEspecializacao(String(m.servicosEspecializacao))
         if (m.descricaoOficina) setDescricaoOficina(String(m.descricaoOficina))
+        if (m.fornecedoresParceiros) setFornecedoresParceiros(String(m.fornecedoresParceiros))
+        if (m.chavePix) setChavePix(String(m.chavePix))
+        if (m.bancoRecebimento) setBancoRecebimento(String(m.bancoRecebimento))
       } catch {
         /* mantém local */
       }
@@ -159,6 +168,9 @@ export default function MeuPerfilOficinaPage() {
     const endTrim = enderecoOficina.trim()
     const servTrim = servicosEspecializacao.trim()
     const descTrim = descricaoOficina.trim()
+    const fornTrim = fornecedoresParceiros.trim()
+    const pixTrim = chavePix.trim()
+    const bancoTrim = bancoRecebimento.trim()
 
     if (!nomeOficinaTrim) {
       setErro('Informe o nome da oficina.')
@@ -199,6 +211,9 @@ export default function MeuPerfilOficinaPage() {
       enderecoOficina: endTrim,
       servicosEspecializacao: servTrim,
       descricaoOficina: descTrim,
+      fornecedoresParceiros: fornTrim,
+      chavePix: pixTrim,
+      bancoRecebimento: bancoTrim,
     }
 
     saveMecanicoPerfil(user.id, payload)
@@ -436,6 +451,45 @@ export default function MeuPerfilOficinaPage() {
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm resize-y min-h-[5rem]"
                 placeholder="Breve apresentação da oficina, diferenciais, horários…"
               />
+            </div>
+            <div>
+              <label htmlFor="perfil-of-forn" className="block text-xs font-medium text-slate-600 mb-1">
+                Gestão de fornecedores parceiros
+              </label>
+              <textarea
+                id="perfil-of-forn"
+                value={fornecedoresParceiros}
+                onChange={(e) => setFornecedoresParceiros(e.target.value)}
+                rows={3}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm resize-y min-h-[4rem]"
+                placeholder="Ex.: Autopeças Silva (SP), Peças Rápidas (Centro), etc."
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+              <div>
+                <label htmlFor="perfil-of-pix" className="block text-xs font-medium text-slate-600 mb-1">
+                  Chave PIX para recebimento
+                </label>
+                <input
+                  id="perfil-of-pix"
+                  value={chavePix}
+                  onChange={(e) => setChavePix(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  placeholder="CPF, CNPJ, e-mail, celular ou chave aleatória"
+                />
+              </div>
+              <div>
+                <label htmlFor="perfil-of-banco" className="block text-xs font-medium text-slate-600 mb-1">
+                  Banco / conta de recebimento
+                </label>
+                <input
+                  id="perfil-of-banco"
+                  value={bancoRecebimento}
+                  onChange={(e) => setBancoRecebimento(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  placeholder="Banco, agência e conta"
+                />
+              </div>
             </div>
           </div>
         </section>

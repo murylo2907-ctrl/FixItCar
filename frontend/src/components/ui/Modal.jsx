@@ -26,7 +26,7 @@ export default function Modal({ open, title, onClose, children, wide }) {
         onClick={onClose}
       />
       <div
-        className={`relative z-10 w-full ${wide ? 'max-w-2xl' : 'max-w-md'} max-h-[90vh] overflow-y-auto rounded-xl bg-white border border-slate-200 shadow-xl`}
+        className={`relative z-10 w-full ${wide ? 'max-w-3xl' : 'max-w-md'} max-h-[90vh] overflow-y-auto rounded-xl bg-white border border-slate-200 shadow-xl mx-auto`}
       >
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100">
           <div id="modal-title" className="min-w-0 flex-1 pr-2">

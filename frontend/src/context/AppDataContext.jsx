@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../hooks/useAuth.js'
 import { fetchAppDataFromApi, pushAppDataToApi } from '../lib/apiClient.js'
-import { CHAMADO_STATUS } from '../lib/chamadoFlow.js'
+import { CHAMADO_STATUS, seguradoraPodeAtuarNoChamado } from '../lib/chamadoFlow.js'
 
 const SNAPSHOT_KEY = 'fixitcar_app_v1'
 
@@ -10,9 +10,53 @@ function newId() {
   return `id-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
-export function normalizeSnapshot(raw) {
+function normalizeChecklist(raw) {
   return {
-    solicitacoes: Array.isArray(raw?.solicitacoes) ? raw.solicitacoes : [],
+    frente: Boolean(raw?.frente),
+    traseira: Boolean(raw?.traseira),
+    lados: Boolean(raw?.lados),
+    painel: Boolean(raw?.painel),
+  }
+}
+
+function normalizeLog(raw) {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((x) => ({
+      id: x?.id || newId(),
+      tipo: String(x?.tipo || 'evento'),
+      texto: String(x?.texto || '').trim(),
+      ator: String(x?.ator || '').trim(),
+      createdAt: x?.createdAt || new Date().toISOString(),
+    }))
+    .filter((x) => x.texto)
+}
+
+function migrateSolicitacao(s) {
+  if (!s || typeof s !== 'object') return s
+  let next = s
+  if (s.usaSeguro && s.status === CHAMADO_STATUS.AGUARDANDO_APROVACAO_CLIENTE) {
+    next = { ...next, status: CHAMADO_STATUS.AGUARDANDO_APROVACAO_SEGURADORA }
+  }
+  const checklistBase = normalizeChecklist(next?.checklistFotos)
+  return {
+    ...next,
+    origemPagamento: next?.origemPagamento || (next?.usaSeguro ? 'seguradora' : 'particular'),
+    vozCliente: String(next?.vozCliente || ''),
+    checklistFotos: checklistBase,
+    sinistroNumero: String(next?.sinistroNumero || ''),
+    nomePerito: String(next?.nomePerito || ''),
+    evidencias: Array.isArray(next?.evidencias) ? next.evidencias : [],
+    aditivos: Array.isArray(next?.aditivos) ? next.aditivos : [],
+    logDecisoes: normalizeLog(next?.logDecisoes),
+    etapaOs: String(next?.etapaOs || 'triagem'),
+  }
+}
+
+export function normalizeSnapshot(raw) {
+  const sol = Array.isArray(raw?.solicitacoes) ? raw.solicitacoes.map(migrateSolicitacao) : []
+  return {
+    solicitacoes: sol,
     pedidos: Array.isArray(raw?.pedidos) ? raw.pedidos : [],
     veiculosSeguradora: Array.isArray(raw?.veiculosSeguradora) ? raw.veiculosSeguradora : [],
     avisosMotorista: Array.isArray(raw?.avisosMotorista) ? raw.avisosMotorista : [],
@@ -101,11 +145,12 @@ export function AppDataProvider({ children }) {
   )
 
   const criarChamado = useCallback(
-    (motoristaId, { placa, descricao, modelo, usaSeguro, motoristaNome }) => {
+    (motoristaId, { placa, descricao, modelo, usaSeguro, motoristaNome, triagem = {} }) => {
       const p = String(placa || '').trim()
       const d = String(descricao || '').trim()
       if (!p || !d) return null
       const now = new Date().toISOString()
+      const usaSeguroBool = Boolean(usaSeguro)
       const row = {
         id: newId(),
         motoristaId: Number(motoristaId),
@@ -113,7 +158,24 @@ export function AppDataProvider({ children }) {
         placa: p.toUpperCase(),
         modelo: String(modelo || '').trim(),
         descricao: d,
-        usaSeguro: Boolean(usaSeguro),
+        usaSeguro: usaSeguroBool,
+        origemPagamento: usaSeguroBool ? 'seguradora' : 'particular',
+        vozCliente: String(triagem?.vozCliente || '').trim(),
+        checklistFotos: normalizeChecklist(triagem?.checklistFotos),
+        sinistroNumero: usaSeguroBool ? String(triagem?.sinistroNumero || '').trim() : '',
+        nomePerito: usaSeguroBool ? String(triagem?.nomePerito || '').trim() : '',
+        evidencias: [],
+        aditivos: [],
+        logDecisoes: [
+          {
+            id: newId(),
+            tipo: 'abertura',
+            texto: `Chamado aberto como ${usaSeguroBool ? 'Seguradora' : 'Particular'}.`,
+            ator: 'motorista',
+            createdAt: now,
+          },
+        ],
+        etapaOs: 'triagem',
         /** Com seguro: vai direto à seguradora (fluxo acordado). Sem seguro: entrada na oficina. */
         status: usaSeguro ? CHAMADO_STATUS.ENVIADO_PARA_SEGURADORA : CHAMADO_STATUS.PENDENTE_MECANICO,
         seguradoraLiberouOficina: false,
@@ -128,23 +190,199 @@ export function AppDataProvider({ children }) {
     [commit]
   )
 
-  const responderPedidoOrcamento = useCallback(
-    (pedidoId, { preco, prazoDias }) => {
+  const motoristaEditarChamado = useCallback(
+    (motoristaId, solicitacaoId, { placa, modelo, descricao, usaSeguro: usaSeguroNovo }) => {
+      const p = String(placa || '').trim()
+      const d = String(descricao || '').trim()
+      if (!p || !d) return { ok: false, message: 'Placa e o ocorrido do chamado são obrigatórios.' }
+      if (typeof usaSeguroNovo !== 'boolean') {
+        return { ok: false, message: 'Indique se possui seguro (Sim ou Não).' }
+      }
+      const s = snapRef.current
+      const sol = s.solicitacoes.find(
+        (x) => x.id === solicitacaoId && Number(x.motoristaId) === Number(motoristaId)
+      )
+      if (!sol) return { ok: false, message: 'Chamado não encontrado.' }
+      if (sol.status === CHAMADO_STATUS.CONCLUIDO || sol.status === CHAMADO_STATUS.FINALIZADO_PELA_SEGURADORA) {
+        return { ok: false, message: 'Não é possível editar um chamado encerrado.' }
+      }
+      const mudouSeguro = Boolean(sol.usaSeguro) !== usaSeguroNovo
+      const estadosOndePodeMudarSeguro =
+        sol.status === CHAMADO_STATUS.PENDENTE_MECANICO ||
+        sol.status === CHAMADO_STATUS.PENDENTE_MECANICO_SEGURO ||
+        sol.status === CHAMADO_STATUS.ENVIADO_PARA_SEGURADORA
+      if (mudouSeguro && !estadosOndePodeMudarSeguro) {
+        return {
+          ok: false,
+          message:
+            'Não é possível alterar o seguro após a oficina ou a seguradora já terem avançado. Edite só placa, modelo e ocorrido, ou o valor atual permanece.',
+        }
+      }
       const now = new Date().toISOString()
+      commit((prev) => {
+        const idx = prev.solicitacoes.findIndex((x) => x.id === solicitacaoId)
+        if (idx === -1) return prev
+        const x = prev.solicitacoes[idx]
+        const list = [...prev.solicitacoes]
+        let next = {
+          ...x,
+          placa: p.toUpperCase(),
+          modelo: String(modelo || '').trim(),
+          descricao: d,
+          usaSeguro: usaSeguroNovo,
+          updatedAt: now,
+        }
+        if (mudouSeguro && estadosOndePodeMudarSeguro) {
+          if (usaSeguroNovo) {
+            next = {
+              ...next,
+              status: CHAMADO_STATUS.ENVIADO_PARA_SEGURADORA,
+              seguradoraLiberouOficina: false,
+              seguradoraResponsavelId: undefined,
+              seguradoraResponsavelNome: undefined,
+            }
+          } else {
+            next = {
+              ...next,
+              status: CHAMADO_STATUS.PENDENTE_MECANICO,
+              seguradoraLiberouOficina: false,
+              seguradoraResponsavelId: undefined,
+              seguradoraResponsavelNome: undefined,
+            }
+          }
+        }
+        list[idx] = next
+        return { ...prev, solicitacoes: list }
+      })
+      return { ok: true }
+    },
+    [commit]
+  )
+
+  const mecanicoRegistrarEvidencia = useCallback(
+    (solicitacaoId, payload) => {
+      const now = new Date().toISOString()
+      const descricao = String(payload?.descricao || '').trim()
+      if (!descricao) return false
+      const evidencia = {
+        id: newId(),
+        descricao,
+        tipo: String(payload?.tipo || 'foto').trim() || 'foto',
+        lado: String(payload?.lado || '').trim(),
+        createdAt: now,
+        autor: String(payload?.autor || 'oficina'),
+      }
       commit((s) => ({
         ...s,
-        pedidos: s.pedidos.map((p) =>
-          p.id === pedidoId
+        solicitacoes: s.solicitacoes.map((x) =>
+          x.id === solicitacaoId
             ? {
-                ...p,
-                status: 'respondido',
-                preco: Number(preco),
-                prazoDias: prazoDias === undefined ? p.prazoDias : Number(prazoDias),
-                respondidoAt: now,
+                ...x,
+                evidencias: [evidencia, ...(x.evidencias || [])],
+                logDecisoes: [
+                  {
+                    id: newId(),
+                    tipo: 'evidencia',
+                    texto: `Evidência enviada: ${descricao}`,
+                    ator: 'oficina',
+                    createdAt: now,
+                  },
+                  ...(x.logDecisoes || []),
+                ],
+                updatedAt: now,
               }
-            : p
+            : x
         ),
       }))
+      return true
+    },
+    [commit]
+  )
+
+  const mecanicoSolicitarAditivo = useCallback(
+    (solicitacaoId, payload) => {
+      const now = new Date().toISOString()
+      const motivo = String(payload?.motivo || '').trim()
+      if (motivo.length < 6) return false
+      commit((s) => ({
+        ...s,
+        solicitacoes: s.solicitacoes.map((x) => {
+          if (x.id !== solicitacaoId) return x
+          const aditivo = {
+            id: newId(),
+            motivo,
+            valor: Number.isFinite(Number(payload?.valor)) ? Number(payload.valor) : undefined,
+            createdAt: now,
+            status: 'pendente',
+          }
+          const voltaAprovacao = x.usaSeguro
+            ? CHAMADO_STATUS.AGUARDANDO_APROVACAO_SEGURADORA
+            : CHAMADO_STATUS.AGUARDANDO_APROVACAO_CLIENTE
+          return {
+            ...x,
+            aditivos: [aditivo, ...(x.aditivos || [])],
+            status: voltaAprovacao,
+            logDecisoes: [
+              {
+                id: newId(),
+                tipo: 'aditivo',
+                texto: `Ajuste de orçamento solicitado: ${motivo}`,
+                ator: 'oficina',
+                createdAt: now,
+              },
+              ...(x.logDecisoes || []),
+            ],
+            updatedAt: now,
+          }
+        }),
+      }))
+      return true
+    },
+    [commit]
+  )
+
+  const responderPedidoOrcamento = useCallback(
+    (pedidoId, { preco, prazoDias, marca, fornecedorNome }) => {
+      const now = new Date().toISOString()
+      commit((s) => {
+        let solicitacaoId = null
+        const nextPedidos = s.pedidos.map((p) => {
+          if (p.id !== pedidoId) return p
+          solicitacaoId = p.solicitacaoId
+          return {
+            ...p,
+            status: 'respondido',
+            preco: Number(preco),
+            prazoDias: prazoDias === undefined ? p.prazoDias : Number(prazoDias),
+            marca: String(marca || p.marca || '').trim(),
+            fornecedorNome: String(fornecedorNome || p.fornecedorNome || '').trim(),
+            respondidoAt: now,
+          }
+        })
+        if (!solicitacaoId) return { ...s, pedidos: nextPedidos }
+        return {
+          ...s,
+          pedidos: nextPedidos,
+          solicitacoes: s.solicitacoes.map((x) =>
+            x.id === solicitacaoId
+              ? {
+                  ...x,
+                  logDecisoes: [
+                    {
+                      id: newId(),
+                      tipo: 'cotacao',
+                      texto: 'Autopeças enviou cotação de peça.',
+                      ator: 'autopecas',
+                      createdAt: now,
+                    },
+                    ...(x.logDecisoes || []),
+                  ],
+                  updatedAt: now,
+                }
+              : x
+          ),
+        }
+      })
     },
     [commit]
   )
@@ -158,7 +396,55 @@ export function AppDataProvider({ children }) {
           if (x.id !== solicitacaoId) return x
           if (Number(x.motoristaId) !== Number(motoristaId)) return x
           if (x.status !== CHAMADO_STATUS.AGUARDANDO_APROVACAO_CLIENTE) return x
-          return { ...x, status: CHAMADO_STATUS.EM_REPARO, updatedAt: now }
+          return {
+            ...x,
+            status: CHAMADO_STATUS.EM_REPARO,
+            etapaOs: 'execucao',
+            logDecisoes: [
+              {
+                id: newId(),
+                tipo: 'aprovacao',
+                texto: 'Motorista aprovou orçamento.',
+                ator: 'motorista',
+                createdAt: now,
+              },
+              ...(x.logDecisoes || []),
+            ],
+            updatedAt: now,
+          }
+        }),
+      }))
+    },
+    [commit]
+  )
+
+  const seguradoraAprovarOrcamento = useCallback(
+    (solicitacaoId, seguradoraId) => {
+      const now = new Date().toISOString()
+      const sid = Number(seguradoraId)
+      if (!Number.isFinite(sid)) return
+      commit((s) => ({
+        ...s,
+        solicitacoes: s.solicitacoes.map((x) => {
+          if (x.id !== solicitacaoId) return x
+          if (x.status !== CHAMADO_STATUS.AGUARDANDO_APROVACAO_SEGURADORA) return x
+          if (!seguradoraPodeAtuarNoChamado(x, sid, s.veiculosSeguradora)) return x
+          return {
+            ...x,
+            status: CHAMADO_STATUS.EM_REPARO,
+            etapaOs: 'execucao',
+            logDecisoes: [
+              {
+                id: newId(),
+                tipo: 'aprovacao',
+                texto: 'Seguradora aprovou orçamento.',
+                ator: 'seguradora',
+                createdAt: now,
+              },
+              ...(x.logDecisoes || []),
+            ],
+            updatedAt: now,
+          }
         }),
       }))
     },
@@ -166,7 +452,11 @@ export function AppDataProvider({ children }) {
   )
 
   const encaminharSeguradoraParaOficina = useCallback(
-    (solicitacaoId) => {
+    (solicitacaoId, opts) => {
+      const { seguradoraId, seguradoraNome } = opts || {}
+      const sid = Number(seguradoraId)
+      const temResponsavel = Number.isFinite(sid)
+      const nomeSeg = String(seguradoraNome || '').trim()
       const now = new Date().toISOString()
       commit((s) => ({
         ...s,
@@ -180,6 +470,13 @@ export function AppDataProvider({ children }) {
                 ...x,
                 status: CHAMADO_STATUS.EM_ANALISE_MECANICO,
                 seguradoraLiberouOficina: true,
+                etapaOs: 'orcamento',
+                ...(temResponsavel
+                  ? {
+                      seguradoraResponsavelId: sid,
+                      ...(nomeSeg ? { seguradoraResponsavelNome: nomeSeg } : {}),
+                    }
+                  : {}),
                 updatedAt: now,
               }
             : x
@@ -289,6 +586,7 @@ export function AppDataProvider({ children }) {
           return {
             ...x,
             status: CHAMADO_STATUS.EM_ANALISE_MECANICO,
+            etapaOs: 'orcamento',
             updatedAt: now,
             ...(!already && mid != null
               ? {
@@ -334,9 +632,13 @@ export function AppDataProvider({ children }) {
           if (x.status !== CHAMADO_STATUS.EM_ANALISE_MECANICO) return x
           if (x.usaSeguro && !x.seguradoraLiberouOficina) return x
           const pecas = Array.isArray(pecasSugeridas) ? pecasSugeridas : []
+          const proxStatus = x.usaSeguro
+            ? CHAMADO_STATUS.AGUARDANDO_APROVACAO_SEGURADORA
+            : CHAMADO_STATUS.AGUARDANDO_APROVACAO_CLIENTE
           return {
             ...x,
-            status: CHAMADO_STATUS.AGUARDANDO_APROVACAO_CLIENTE,
+            status: proxStatus,
+            etapaOs: 'aprovacao',
             descricaoMecanico: String(descricaoMecanico || '').trim(),
             pecasSugeridas: pecas.map((p) => ({
               nome: String(p.nome || '').trim(),
@@ -367,6 +669,8 @@ export function AppDataProvider({ children }) {
           placa: sol.placa,
           mecanicaNome: String(mecanicaNome || '').trim() || 'Oficina',
           status: 'pendente',
+          fornecedorNome: '',
+          marca: '',
           precoUnitarioReferencia: Number.isFinite(Number(p.precoUnitario)) ? Number(p.precoUnitario) : undefined,
           createdAt: now,
         }))
@@ -382,18 +686,65 @@ export function AppDataProvider({ children }) {
     [commit]
   )
 
-  const mecanicoConcluirServico = useCallback(
+  const dispararCotacaoRede = useCallback(
     (solicitacaoId) => {
       const now = new Date().toISOString()
       commit((s) => ({
         ...s,
-        solicitacoes: s.solicitacoes.map((x) => {
+        pedidos: s.pedidos.map((p) =>
+          p.solicitacaoId === solicitacaoId && (p.status === 'pendente' || p.status === 'em_analise')
+            ? { ...p, status: 'em_analise', requestedAt: now }
+            : p
+        ),
+      }))
+    },
+    [commit]
+  )
+
+  const oficinaComprarPecasHibrido = useCallback(
+    (solicitacaoId, selecoes = []) => {
+      const now = new Date().toISOString()
+      const ids = new Set((selecoes || []).map((x) => x.id))
+      commit((s) => ({
+        ...s,
+        pedidos: s.pedidos.map((p) => {
+          if (p.solicitacaoId !== solicitacaoId || !ids.has(p.id)) return p
+          const escolhido = selecoes.find((x) => x.id === p.id)
+          return {
+            ...p,
+            status: 'comprado',
+            fornecedorEscolhido: String(escolhido?.fornecedor || p.fornecedorNome || 'Fornecedor'),
+            preco: Number.isFinite(Number(escolhido?.preco)) ? Number(escolhido.preco) : p.preco,
+            prazoDias: Number.isFinite(Number(escolhido?.prazoDias)) ? Number(escolhido.prazoDias) : p.prazoDias,
+            marca: String(escolhido?.marca || p.marca || '').trim(),
+            compradoAt: now,
+          }
+        }),
+      }))
+    },
+    [commit]
+  )
+
+  const mecanicoConcluirServico = useCallback(
+    (solicitacaoId) => {
+      const now = new Date().toISOString()
+      commit((s) => {
+        let fechou = false
+        const solicitacoes = s.solicitacoes.map((x) => {
           if (x.id !== solicitacaoId) return x
           const ok = x.status === CHAMADO_STATUS.EM_REPARO || x.status === CHAMADO_STATUS.AGUARDANDO_PECAS
           if (!ok) return x
-          return { ...x, status: CHAMADO_STATUS.CONCLUIDO, updatedAt: now }
-        }),
-      }))
+          fechou = true
+          return { ...x, status: CHAMADO_STATUS.CONCLUIDO, etapaOs: 'pronto', updatedAt: now }
+        })
+        if (!fechou) return s
+        const pedidos = s.pedidos.map((p) =>
+          p.solicitacaoId === solicitacaoId && p.status !== 'comprado'
+            ? { ...p, status: 'comprado', compradoAt: now, autoEncerrado: true }
+            : p
+        )
+        return { ...s, solicitacoes, pedidos }
+      })
     },
     [commit]
   )
@@ -419,8 +770,12 @@ export function AppDataProvider({ children }) {
       avisosMotorista: snap.avisosMotorista,
       syncAppData,
       criarChamado,
+      motoristaEditarChamado,
+      mecanicoRegistrarEvidencia,
+      mecanicoSolicitarAditivo,
       responderPedidoOrcamento,
       motoristaAprovarOrcamento,
+      seguradoraAprovarOrcamento,
       encaminharSeguradoraParaOficina,
       finalizarSinistroSeguradora,
       enviarAvisoSeguradoraParaMotorista,
@@ -430,6 +785,8 @@ export function AppDataProvider({ children }) {
       mecanicoEnviarParaSeguradora,
       mecanicoRegistrarOrcamento,
       mecanicoGerarPedidosCotacao,
+      dispararCotacaoRede,
+      oficinaComprarPecasHibrido,
       mecanicoConcluirServico,
       marcarAvisoMotoristaComoLido,
     }),
@@ -437,8 +794,12 @@ export function AppDataProvider({ children }) {
       snap,
       syncAppData,
       criarChamado,
+      motoristaEditarChamado,
+      mecanicoRegistrarEvidencia,
+      mecanicoSolicitarAditivo,
       responderPedidoOrcamento,
       motoristaAprovarOrcamento,
+      seguradoraAprovarOrcamento,
       encaminharSeguradoraParaOficina,
       finalizarSinistroSeguradora,
       enviarAvisoSeguradoraParaMotorista,
@@ -448,6 +809,8 @@ export function AppDataProvider({ children }) {
       mecanicoEnviarParaSeguradora,
       mecanicoRegistrarOrcamento,
       mecanicoGerarPedidosCotacao,
+      dispararCotacaoRede,
+      oficinaComprarPecasHibrido,
       mecanicoConcluirServico,
       marcarAvisoMotoristaComoLido,
     ]

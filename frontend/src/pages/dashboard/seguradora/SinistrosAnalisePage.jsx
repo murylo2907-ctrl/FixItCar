@@ -175,7 +175,12 @@ export default function SinistrosAnalisePage() {
                       {naBase ? (
                         <button
                           type="button"
-                          onClick={() => encaminharSeguradoraParaOficina(item.id)}
+                          onClick={() =>
+                            encaminharSeguradoraParaOficina(item.id, {
+                              seguradoraId: user.id,
+                              seguradoraNome: user?.nome,
+                            })
+                          }
                           className={`${CLASSE_BOTAO_ACAO} bg-brand-cyan-deep text-white`}
                         >
                           Encaminhar para oficina

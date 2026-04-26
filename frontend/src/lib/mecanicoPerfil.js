@@ -14,6 +14,9 @@ const empty = () => ({
   enderecoOficina: '',
   servicosEspecializacao: '',
   descricaoOficina: '',
+  fornecedoresParceiros: '',
+  chavePix: '',
+  bancoRecebimento: '',
 })
 
 export function loadMecanicoPerfil(userId) {

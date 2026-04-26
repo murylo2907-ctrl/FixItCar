@@ -46,7 +46,9 @@ export default function EntradaVeiculosPage() {
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
               <th className="px-4 py-3 font-semibold">Placa</th>
+              <th className="px-4 py-3 font-semibold">Pagamento</th>
               <th className="px-4 py-3 font-semibold">Relato</th>
+              <th className="px-4 py-3 font-semibold">Checklist fotos</th>
               <th className="px-4 py-3 font-semibold">Etapa</th>
               <th className="px-4 py-3 font-semibold text-right">Ação</th>
             </tr>
@@ -54,7 +56,7 @@ export default function EntradaVeiculosPage() {
           <tbody>
             {lista.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
                   Nenhuma entrada hoje nesta fila.
                 </td>
               </tr>
@@ -62,7 +64,29 @@ export default function EntradaVeiculosPage() {
               lista.map((t) => (
                 <tr key={t.id} className="border-b border-slate-100">
                   <td className="px-4 py-3 font-mono font-semibold">{t.placa}</td>
-                  <td className="px-4 py-3 text-slate-700 max-w-md truncate">{t.descricao}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${
+                        t.usaSeguro ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
+                      }`}
+                    >
+                      {t.usaSeguro ? 'Seguradora' : 'Particular'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-slate-700 max-w-md">
+                    <p className="truncate">{t.descricao}</p>
+                    {t.vozCliente ? <p className="text-[11px] text-slate-500 mt-1 truncate">Voz: {t.vozCliente}</p> : null}
+                    {t.usaSeguro && (t.sinistroNumero || t.nomePerito) ? (
+                      <p className="text-[11px] text-slate-500 mt-1 truncate">
+                        Sinistro: {t.sinistroNumero || '—'} · Perito: {t.nomePerito || '—'}
+                      </p>
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-slate-600">
+                    {['frente', 'traseira', 'lados', 'painel']
+                      .filter((k) => Boolean(t?.checklistFotos?.[k]))
+                      .join(', ') || 'Sem marcações'}
+                  </td>
                   <td className="px-4 py-3 text-xs text-slate-600">{labelChamadoStatus(t.status)}</td>
                   <td className="px-4 py-3 text-right">
                     <button type="button" onClick={() => setSel(t)} className="text-sm font-semibold text-brand-cyan-deep hover:underline">
@@ -81,6 +105,7 @@ export default function EntradaVeiculosPage() {
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
               <th className="px-4 py-3 font-semibold">Placa</th>
+              <th className="px-4 py-3 font-semibold">Pagamento</th>
               <th className="px-4 py-3 font-semibold">Entrada</th>
               <th className="px-4 py-3 font-semibold">Etapa</th>
               <th className="px-4 py-3 text-right font-semibold">Ação</th>
@@ -89,7 +114,7 @@ export default function EntradaVeiculosPage() {
           <tbody>
             {fila.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
                   Fila vazia.
                 </td>
               </tr>
@@ -97,6 +122,7 @@ export default function EntradaVeiculosPage() {
               fila.map((t) => (
                 <tr key={t.id} className="border-b border-slate-100">
                   <td className="px-4 py-3 font-mono">{t.placa}</td>
+                  <td className="px-4 py-3 text-xs text-slate-700">{t.usaSeguro ? 'Seguradora' : 'Particular'}</td>
                   <td className="px-4 py-3 text-slate-600 text-xs">{new Date(t.createdAt).toLocaleString('pt-BR')}</td>
                   <td className="px-4 py-3 text-xs text-slate-600">{labelChamadoStatus(t.status)}</td>
                   <td className="px-4 py-3 text-right">

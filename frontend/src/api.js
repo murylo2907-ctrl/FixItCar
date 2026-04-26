@@ -14,7 +14,8 @@ const roleLabels = {
  * só entra se o registro antigo não tiver `role`.
  */
 function resolveRole(row, perfilSelect) {
-  const registered = row.role && typeof row.role === 'string' ? row.role : inferRoleFromEmail(row.email)
+  const registered =
+    row.role && typeof row.role === 'string' ? row.role : inferRoleFromEmail(row.email) || 'motorista'
   if (!perfilSelect || perfilSelect === 'auto') {
     return registered
   }
@@ -30,9 +31,9 @@ function resolveRole(row, perfilSelect) {
 /** Login demo: usuários cadastrados em localStorage (localRegistry). */
 export async function apiLogin(email, senha, perfilSelect) {
   const list = loadRegisteredUsers()
-  const row = list.find(
-    (u) => u.email === String(email || '').toLowerCase().trim() && u.senha === String(senha)
-  )
+  const emailNorm = String(email || '').toLowerCase().trim()
+  const senhaNorm = String(senha ?? '').trim()
+  const row = list.find((u) => u.email === emailNorm && u.senha === senhaNorm)
   if (!row) {
     throw new Error('E-mail ou senha incorretos.')
   }

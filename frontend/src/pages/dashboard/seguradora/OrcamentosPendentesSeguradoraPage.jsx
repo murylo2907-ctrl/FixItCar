@@ -1,33 +1,43 @@
 import { useAuth } from '../../../hooks/useAuth.js'
 import { useAppData } from '../../../hooks/useAppData.js'
-import { CHAMADO_STATUS, labelChamadoStatus, totalPecasSugeridas } from '../../../lib/chamadoFlow.js'
+import {
+  CHAMADO_STATUS,
+  labelChamadoStatus,
+  seguradoraPodeAtuarNoChamado,
+  totalPecasSugeridas,
+} from '../../../lib/chamadoFlow.js'
 
-export default function OrcamentosPendentesPage() {
+export default function OrcamentosPendentesSeguradoraPage() {
   const { user } = useAuth()
-  const { solicitacoes, motoristaAprovarOrcamento } = useAppData()
+  const { solicitacoes, veiculosSeguradora, seguradoraAprovarOrcamento } = useAppData()
+  const sid = Number(user?.id)
 
   const pendentes = solicitacoes
-    .filter((s) => Number(s.motoristaId) === Number(user?.id))
-    .filter((s) => s.status === CHAMADO_STATUS.AGUARDANDO_APROVACAO_CLIENTE)
+    .filter(
+      (s) => s.status === CHAMADO_STATUS.AGUARDANDO_APROVACAO_SEGURADORA && seguradoraPodeAtuarNoChamado(s, sid, veiculosSeguradora)
+    )
     .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
 
   return (
     <>
-      <h1 className="text-xl font-bold text-slate-900 tracking-tight mb-6">Aprovar orçamento</h1>
+      <h1 className="text-xl font-bold text-slate-900 tracking-tight mb-2">Aprovar orçamento (oficina)</h1>
+      <p className="text-sm text-slate-600 mb-6 max-w-2xl">
+        Chamados com seguro: a oficina envia o orçamento para a seguradora aprovar. Após a aprovação, a oficina segue com o
+        reparo.
+      </p>
       {pendentes.length === 0 ? (
-        <div className="text-sm text-slate-500 rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm space-y-2">
-          <p>Nada pendente da oficina para você aprovar.</p>
-          <p className="text-xs text-slate-400 max-w-md mx-auto">
-            Se o seu carro tem seguro, a seguradora aprova o orçamento da oficina — acompanhe o status em{' '}
-            <strong className="font-medium text-slate-600">Meus carros</strong>.
-          </p>
-        </div>
+        <p className="text-sm text-slate-500 rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          Nenhum orçamento aguardando sua aprovação.
+        </p>
       ) : (
         <ul className="space-y-4">
           {pendentes.map((s) => (
             <li key={s.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
               <div className="flex flex-wrap justify-between gap-2">
-                <p className="font-mono font-semibold text-slate-900">{s.placa}</p>
+                <div>
+                  <p className="font-mono font-semibold text-slate-900">{s.placa}</p>
+                  {s.motoristaNome ? <p className="text-xs text-slate-500">Motorista: {s.motoristaNome}</p> : null}
+                </div>
                 <span className="text-xs text-slate-500">{labelChamadoStatus(s.status)}</span>
               </div>
               {s.descricaoMecanico ? (
@@ -58,7 +68,7 @@ export default function OrcamentosPendentesPage() {
               ) : null}
               <button
                 type="button"
-                onClick={() => motoristaAprovarOrcamento(s.id, user.id)}
+                onClick={() => seguradoraAprovarOrcamento(s.id, user.id)}
                 className="rounded-lg bg-brand-cyan-deep text-white text-sm font-semibold px-5 py-2.5 shadow-sm"
               >
                 Aprovar orçamento

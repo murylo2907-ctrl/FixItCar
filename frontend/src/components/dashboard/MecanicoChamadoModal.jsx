@@ -2,7 +2,15 @@ import { useMemo, useState } from 'react'
 import Modal from '../ui/Modal.jsx'
 import { useAuth } from '../../hooks/useAuth.js'
 import { useAppData } from '../../hooks/useAppData.js'
-import { CHAMADO_STATUS, labelChamadoStatus, totalPecasSugeridas } from '../../lib/chamadoFlow.js'
+import {
+  CHAMADO_STATUS,
+  ETAPAS_OS,
+  etapaOsFromStatus,
+  labelChamadoStatus,
+  labelEtapaOs,
+  semaforoStatus,
+  totalPecasSugeridas,
+} from '../../lib/chamadoFlow.js'
 import { loadMecanicoPerfil } from '../../lib/mecanicoPerfil.js'
 
 function emptyPeca() {
@@ -17,6 +25,8 @@ export default function MecanicoChamadoModal({ solicitacao: s, onClose }) {
     mecanicoEnviarParaSeguradora,
     mecanicoRegistrarOrcamento,
     mecanicoGerarPedidosCotacao,
+    mecanicoRegistrarEvidencia,
+    mecanicoSolicitarAditivo,
     mecanicoConcluirServico,
   } = useAppData()
 
@@ -32,8 +42,14 @@ export default function MecanicoChamadoModal({ solicitacao: s, onClose }) {
   )
   const [rascunhoPeca, setRascunhoPeca] = useState(() => emptyPeca())
   const [erroRascunho, setErroRascunho] = useState('')
+  const [evidenciaTexto, setEvidenciaTexto] = useState('')
+  const [aditivoTexto, setAditivoTexto] = useState('')
+  const [aditivoValor, setAditivoValor] = useState('')
 
   const pedidosDaOs = pedidos.filter((p) => p.solicitacaoId === s.id)
+  const etapaAtual = etapaOsFromStatus(s.status, s.etapaOs)
+  const idxEtapa = ETAPAS_OS.indexOf(etapaAtual)
+  const semaforo = semaforoStatus(s.status)
 
   function submitOrcamento(e) {
     e.preventDefault()
@@ -94,7 +110,11 @@ export default function MecanicoChamadoModal({ solicitacao: s, onClose }) {
             <span className="font-mono font-semibold">{s.placa}</span>
           </p>
           <p className="whitespace-pre-wrap rounded-lg border border-slate-100 bg-slate-50 p-3">{s.descricao}</p>
-          <p className="text-xs text-slate-500">{s.usaSeguro ? 'Com seguro — após triagem seguirá fluxo com seguradora.' : 'Sem seguro — orçamento direto ao motorista.'}</p>
+          <p className="text-xs text-slate-500">
+            {s.usaSeguro
+              ? 'Com seguro — após triagem seguirá fluxo com seguradora; o orçamento será aprovado pela seguradora.'
+              : 'Sem seguro — orçamento aprovado pelo motorista.'}
+          </p>
           <button
             type="button"
             onClick={() => {
@@ -139,7 +159,11 @@ export default function MecanicoChamadoModal({ solicitacao: s, onClose }) {
       }
       return (
         <form onSubmit={submitOrcamento} className="space-y-4 text-sm">
-          <p className="text-slate-600">Registre laudo e itens do orçamento para aprovação do motorista.</p>
+          <p className="text-slate-600">
+            {s.usaSeguro
+              ? 'Registre laudo e itens do orçamento. A aprovação seguirá para a seguradora (não para o motorista).'
+              : 'Registre laudo e itens do orçamento para aprovação do motorista.'}
+          </p>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Laudo / proposta</label>
             <textarea
@@ -263,7 +287,7 @@ export default function MecanicoChamadoModal({ solicitacao: s, onClose }) {
             disabled={itensOrcamento.length === 0}
             className="w-full rounded-lg bg-slate-900 text-white font-semibold py-2.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Enviar orçamento ao motorista
+            {s.usaSeguro ? 'Enviar orçamento à seguradora' : 'Enviar orçamento ao motorista'}
           </button>
         </form>
       )
@@ -280,11 +304,19 @@ export default function MecanicoChamadoModal({ solicitacao: s, onClose }) {
       )
     }
 
-    if (s.status === CHAMADO_STATUS.AGUARDANDO_APROVACAO_CLIENTE) {
+    if (
+      s.status === CHAMADO_STATUS.AGUARDANDO_APROVACAO_CLIENTE ||
+      s.status === CHAMADO_STATUS.AGUARDANDO_APROVACAO_SEGURADORA
+    ) {
       const total = totalPecasSugeridas(s.pecasSugeridas)
       return (
         <div className="text-sm space-y-3 text-slate-700">
           <p className="text-slate-500">Situação: {labelChamadoStatus(s.status)}</p>
+          {s.status === CHAMADO_STATUS.AGUARDANDO_APROVACAO_SEGURADORA ? (
+            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+              Com seguro: a seguradora aprova o orçamento no painel dela. O motorista não aprova nesta etapa.
+            </p>
+          ) : null}
           {s.descricaoMecanico ? (
             <div>
               <p className="text-xs font-medium text-slate-500 mb-1">Proposta</p>
@@ -302,6 +334,70 @@ export default function MecanicoChamadoModal({ solicitacao: s, onClose }) {
       return (
         <div className="space-y-4 text-sm">
           <p className="text-slate-600">Orçamento aprovado. Gere pedidos de cotação para a Auto Peças ou finalize o serviço.</p>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+            <p className="text-xs font-semibold text-slate-700">Chat interno / evidência técnica</p>
+            <div className="flex gap-2">
+              <input
+                value={evidenciaTexto}
+                onChange={(e) => setEvidenciaTexto(e.target.value)}
+                placeholder="Ex.: Foto peça velha vs nova anexada no box 2"
+                className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (!String(evidenciaTexto || '').trim()) return
+                  mecanicoRegistrarEvidencia(s.id, {
+                    descricao: evidenciaTexto,
+                    tipo: 'foto',
+                    autor: mecanicaNome,
+                  })
+                  setEvidenciaTexto('')
+                }}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+              >
+                Postar
+              </button>
+            </div>
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+            <p className="text-xs font-semibold text-amber-900">Ajustar Orçamento</p>
+            <textarea
+              value={aditivoTexto}
+              onChange={(e) => setAditivoTexto(e.target.value)}
+              rows={2}
+              className="w-full rounded-lg border border-amber-200 px-3 py-2 text-sm bg-white"
+              placeholder="Descreva o problema extra encontrado no conserto"
+            />
+            <div className="flex gap-2">
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={aditivoValor}
+                onChange={(e) => setAditivoValor(e.target.value)}
+                className="w-40 rounded-lg border border-amber-200 px-3 py-2 text-sm bg-white"
+                placeholder="Valor extra R$"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const ok = mecanicoSolicitarAditivo(s.id, {
+                    motivo: aditivoTexto,
+                    valor: aditivoValor,
+                  })
+                  if (ok) {
+                    setAditivoTexto('')
+                    setAditivoValor('')
+                    onClose?.()
+                  }
+                }}
+                className="rounded-lg bg-amber-500 text-white px-3 py-2 text-xs font-semibold"
+              >
+                Ajustar Orçamento
+              </button>
+            </div>
+          </div>
           <button
             type="button"
             onClick={() => {
@@ -344,6 +440,21 @@ export default function MecanicoChamadoModal({ solicitacao: s, onClose }) {
               ))
             )}
           </ul>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+            <p className="text-xs font-semibold text-slate-700">Ajustar Orçamento (se necessário)</p>
+            <button
+              type="button"
+              onClick={() => {
+                const ok = mecanicoSolicitarAditivo(s.id, {
+                  motivo: 'Solicitação de aditivo durante aguardando peças',
+                })
+                if (ok) onClose?.()
+              }}
+              className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-amber-800"
+            >
+              Ajustar Orçamento
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => {
@@ -375,10 +486,40 @@ export default function MecanicoChamadoModal({ solicitacao: s, onClose }) {
   return (
     <Modal open={true} title={modalTitle} onClose={onClose} wide>
       <div className="space-y-4">
+        <div className={`rounded-lg border px-3 py-2 text-xs font-medium ${semaforo.classe}`}>
+          Semáforo do status: {semaforo.cor.toUpperCase()}
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-3">
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Timeline da OS</p>
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+            {ETAPAS_OS.map((et, i) => (
+              <div
+                key={et}
+                className={`rounded-md border px-2 py-1.5 text-xs ${
+                  i <= idxEtapa ? 'border-brand-cyan-deep bg-brand-cyan/20 text-slate-800' : 'border-slate-200 text-slate-500'
+                }`}
+              >
+                {labelEtapaOs(et)}
+              </div>
+            ))}
+          </div>
+        </div>
         <p className="text-xs text-slate-500">
           Etapa: <span className="font-medium text-slate-700">{labelChamadoStatus(s.status)}</span>
         </p>
         {body}
+        {(s.logDecisoes?.length || s.evidencias?.length) ? (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
+            <p className="text-xs font-semibold text-slate-700">Log de decisões</p>
+            <ul className="space-y-1 max-h-28 overflow-y-auto">
+              {(s.logDecisoes || []).slice(0, 6).map((l) => (
+                <li key={l.id} className="text-xs text-slate-600">
+                  {new Date(l.createdAt).toLocaleString('pt-BR')} — {l.texto}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <div className="flex justify-end pt-2">
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
             Fechar

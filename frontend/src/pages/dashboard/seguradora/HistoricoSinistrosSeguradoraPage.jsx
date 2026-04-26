@@ -3,6 +3,7 @@ import Modal from '../../../components/ui/Modal.jsx'
 import { useAuth } from '../../../hooks/useAuth.js'
 import { useAppData } from '../../../hooks/useAppData.js'
 import { CHAMADO_STATUS, chavePlacaComparacao, labelChamadoStatus } from '../../../lib/chamadoFlow.js'
+import { totalPecasSugeridas } from '../../../lib/chamadoFlow.js'
 
 export default function HistoricoSinistrosSeguradoraPage() {
   const { user } = useAuth()
@@ -38,6 +39,9 @@ export default function HistoricoSinistrosSeguradoraPage() {
     )
     .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
 
+  const total = lista.reduce((acc, s) => acc + totalPecasSugeridas(s.pecasSugeridas), 0)
+  const ticket = lista.length ? total / lista.length : 0
+
   return (
     <>
       <h1 className="text-xl font-bold text-slate-900 tracking-tight mb-2">Histórico de sinistros</h1>
@@ -45,6 +49,14 @@ export default function HistoricoSinistrosSeguradoraPage() {
         Chamados com seguro já encerrados pela seguradora (sem oficina) ou concluídos após reparo. Dados locais neste
         navegador.
       </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+        <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+          Ticket médio de sinistros: <span className="font-semibold">R$ {ticket.toFixed(2)}</span>
+        </p>
+        <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+          Total aprovado no histórico: <span className="font-semibold">R$ {total.toFixed(2)}</span>
+        </p>
+      </div>
 
       <div className="rounded-xl bg-white border border-slate-200 shadow-sm overflow-x-auto">
         <table className="w-full text-left text-sm min-w-[640px]">
@@ -119,6 +131,18 @@ export default function HistoricoSinistrosSeguradoraPage() {
               Aberto em {new Date(detalhe.createdAt).toLocaleString('pt-BR')} · Atualizado em{' '}
               {new Date(detalhe.updatedAt || detalhe.createdAt).toLocaleString('pt-BR')}
             </p>
+            {detalhe.logDecisoes?.length ? (
+              <div>
+                <p className="text-xs font-medium text-slate-500 mb-1">Log de decisões</p>
+                <ul className="space-y-1 max-h-32 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50 p-2">
+                  {detalhe.logDecisoes.slice(0, 8).map((l) => (
+                    <li key={l.id} className="text-xs text-slate-600">
+                      {new Date(l.createdAt).toLocaleString('pt-BR')} — {l.texto}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div className="flex justify-end pt-2">
               <button
                 type="button"

@@ -33,6 +33,9 @@ export default function HistoricoMotoristaPage() {
     )
     .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
 
+  const totalGasto = lista.reduce((acc, s) => acc + totalPecasSugeridas(s.pecasSugeridas), 0)
+  const ticketMedio = lista.length ? totalGasto / lista.length : 0
+
   return (
     <>
       <h1 className="text-xl font-bold text-slate-900 tracking-tight mb-2">Histórico</h1>
@@ -40,6 +43,14 @@ export default function HistoricoMotoristaPage() {
         Serviços concluídos. Use <strong className="font-semibold text-slate-700">Detalhes</strong> para ver relato,
         descrição da oficina, valores e quanto tempo levou até a conclusão.
       </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+        <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+          Ticket médio: <span className="font-semibold">R$ {ticketMedio.toFixed(2)}</span>
+        </p>
+        <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+          Total no histórico: <span className="font-semibold">R$ {totalGasto.toFixed(2)}</span>
+        </p>
+      </div>
       <div className="rounded-xl bg-white border border-slate-200 shadow-sm overflow-x-auto">
         <table className="w-full text-left text-sm min-w-[640px]">
           <thead>

@@ -7,7 +7,8 @@ import { getNotificationSummary } from '../../lib/notificationSummary.js'
 /** Sino + painel (site público ou dashboard). */
 export default function NotificationBell({ buttonClassName = '', layout = 'dashboard' }) {
   const { user } = useAuth()
-  const { solicitacoes, avisosMotorista, pedidos, syncAppData, marcarAvisoMotoristaComoLido } = useAppData()
+  const { solicitacoes, avisosMotorista, pedidos, veiculosSeguradora, syncAppData, marcarAvisoMotoristaComoLido } =
+    useAppData()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -20,8 +21,8 @@ export default function NotificationBell({ buttonClassName = '', layout = 'dashb
   }, [])
 
   const { listaNotificacoes, totalBadge, pendentesOrcamento } = useMemo(
-    () => getNotificationSummary(user, solicitacoes, avisosMotorista, pedidos),
-    [user, solicitacoes, avisosMotorista, pedidos]
+    () => getNotificationSummary(user, solicitacoes, avisosMotorista, pedidos, veiculosSeguradora),
+    [user, solicitacoes, avisosMotorista, pedidos, veiculosSeguradora]
   )
 
   if (!user?.role) return null
@@ -56,6 +57,17 @@ export default function NotificationBell({ buttonClassName = '', layout = 'dashb
                   ? 'Há 1 orçamento aguardando sua aprovação.'
                   : `Há ${pendentesOrcamento} orçamentos aguardando sua aprovação.`}{' '}
                 Abra <strong className="font-semibold">Aprovar orçamento</strong> no painel.
+              </p>
+            </div>
+          ) : null}
+          {user.role === 'seguradora' && pendentesOrcamento > 0 ? (
+            <div className="px-3 py-2 border-b border-slate-100 text-sm text-slate-700">
+              <p className="font-medium text-slate-900">Orçamento da oficina</p>
+              <p className="text-xs text-slate-600 mt-1">
+                {pendentesOrcamento === 1
+                  ? 'Há 1 orçamento aguardando aprovação da seguradora.'
+                  : `Há ${pendentesOrcamento} orçamentos aguardando aprovação.`}{' '}
+                Abra <strong className="font-semibold">Aprovar orçamento</strong> no menu.
               </p>
             </div>
           ) : null}
@@ -94,11 +106,21 @@ export default function NotificationBell({ buttonClassName = '', layout = 'dashb
             : null}
           {user.role !== 'motorista' ? (
             <p className="px-3 py-4 text-sm text-slate-500">
-              {totalBadge > 0
-                ? layout === 'site'
-                  ? `Você tem ${totalBadge} item(ns) pendente(s). Abra o painel pelo link com seu nome.`
-                  : `Você tem ${totalBadge} item(ns) pendente(s) no painel. Abra o menu ao lado.`
-                : 'Nada pendente no momento.'}
+              {totalBadge > 0 ? (
+                user.role === 'mecanico' ? (
+                  <>Você tem itens pendentes. Próxima ação sugerida: abrir <strong className="font-semibold">Ordens de serviço</strong>.</>
+                ) : user.role === 'autopecas' ? (
+                  <>Há cotações aguardando resposta. Próxima ação: <strong className="font-semibold">Cotações recebidas</strong>.</>
+                ) : user.role === 'seguradora' ? (
+                  <>Existem aprovações em fila. Próxima ação: <strong className="font-semibold">Aprovar orçamento</strong>.</>
+                ) : layout === 'site' ? (
+                  `Você tem ${totalBadge} item(ns) pendente(s). Abra o painel pelo link com seu nome.`
+                ) : (
+                  `Você tem ${totalBadge} item(ns) pendente(s) no painel. Abra o menu ao lado.`
+                )
+              ) : (
+                'Nada pendente no momento.'
+              )}
             </p>
           ) : null}
         </div>

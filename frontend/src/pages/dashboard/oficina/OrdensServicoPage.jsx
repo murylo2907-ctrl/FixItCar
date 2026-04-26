@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import MecanicoChamadoModal from '../../../components/dashboard/MecanicoChamadoModal.jsx'
 import { useAppData } from '../../../hooks/useAppData.js'
 import { useAuth } from '../../../hooks/useAuth.js'
-import { CHAMADO_STATUS, labelChamadoStatus } from '../../../lib/chamadoFlow.js'
+import { CHAMADO_STATUS, etapaOsFromStatus, labelChamadoStatus } from '../../../lib/chamadoFlow.js'
 import { solicitacaoVisivelParaMecanico } from '../../../lib/mecanicoSolicitacaoFilter.js'
 
 export default function OrdensServicoPage() {
@@ -28,49 +28,44 @@ export default function OrdensServicoPage() {
     .filter((s) => solicitacaoVisivelParaMecanico(s, user?.id))
     .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
 
+  const colunas = [
+    { id: 'triagem', titulo: 'Triagem' },
+    { id: 'orcamento', titulo: 'Orçamento' },
+    { id: 'aprovacao', titulo: 'Aprovação' },
+    { id: 'execucao', titulo: 'Em execução' },
+    { id: 'pronto', titulo: 'Finalizado' },
+  ]
+
   return (
     <>
       <h1 className="text-xl font-bold text-slate-900 tracking-tight mb-6">Ordens de serviço</h1>
-      <div className="rounded-xl bg-white border border-slate-200 shadow-sm overflow-x-auto">
-        <table className="w-full text-left text-sm min-w-[560px]">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-              <th className="px-4 py-3 font-semibold">Placa</th>
-              <th className="px-4 py-3 font-semibold">Seguro</th>
-              <th className="px-4 py-3 font-semibold">Situação</th>
-              <th className="px-4 py-3 font-semibold text-right">Ação</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lista.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-slate-500 space-y-2">
-                  <p>Nenhuma OS ativa.</p>
-                  <p className="text-xs text-slate-400 max-w-md mx-auto">
-                    Se o motorista já abriu chamado: mesmo URL e modo do navegador, ou recarregue a página (F5).
-                  </p>
-                </td>
-              </tr>
-            ) : (
-              lista.map((t) => (
-                <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/80">
-                  <td className="px-4 py-3 font-mono font-medium">{t.placa}</td>
-                  <td className="px-4 py-3 text-slate-600">{t.usaSeguro ? 'Sim' : 'Não'}</td>
-                  <td className="px-4 py-3 text-slate-700 max-w-xs">{labelChamadoStatus(t.status)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => setSel(t)}
-                      className="text-sm font-semibold text-brand-cyan-deep hover:underline"
-                    >
-                      Abrir
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-3">
+        {colunas.map((c) => {
+          const cards = lista.filter((s) => etapaOsFromStatus(s.status, s.etapaOs) === c.id)
+          return (
+            <section key={c.id} className="rounded-xl border border-slate-200 bg-white shadow-sm min-h-[240px]">
+              <div className="px-3 py-2 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                <h2 className="text-xs font-semibold text-slate-700 uppercase tracking-wide">{c.titulo}</h2>
+                <span className="text-[11px] text-slate-500">{cards.length}</span>
+              </div>
+              <div className="p-3 space-y-2">
+                {cards.length === 0 ? <p className="text-xs text-slate-400">Sem itens.</p> : null}
+                {cards.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setSel(t)}
+                    className="w-full text-left rounded-lg border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2"
+                  >
+                    <p className="font-mono text-sm font-semibold text-slate-900">{t.placa}</p>
+                    <p className="text-xs text-slate-600">{t.usaSeguro ? 'Seguradora' : 'Particular'}</p>
+                    <p className="text-xs text-slate-500 mt-1 truncate">{labelChamadoStatus(t.status)}</p>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )
+        })}
       </div>
       {selLive ? (
         <MecanicoChamadoModal

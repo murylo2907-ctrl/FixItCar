@@ -27,9 +27,11 @@ export default function CotacoesRecebidasPage() {
   const [ativo, setAtivo] = useState(null)
   const [preco, setPreco] = useState('')
   const [prazo, setPrazo] = useState('')
+  const [marca, setMarca] = useState('Original')
+  const [fornecedorNome, setFornecedorNome] = useState('')
 
   const pendentes = pedidos
-    .filter((p) => p.status === 'pendente' && p.solicitacaoId)
+    .filter((p) => (p.status === 'pendente' || p.status === 'em_analise') && p.solicitacaoId)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
 
   useEffect(() => {
@@ -54,6 +56,8 @@ export default function CotacoesRecebidasPage() {
     responderPedidoOrcamento(ativo.id, {
       preco: v,
       prazoDias: prazo === '' ? undefined : Number(prazo),
+      marca,
+      fornecedorNome,
     })
     setAtivo(null)
   }
@@ -105,6 +109,8 @@ export default function CotacoesRecebidasPage() {
                   setAtivo(c)
                   setPreco('')
                   setPrazo('')
+                  setMarca('Original')
+                  setFornecedorNome('')
                 }}
                 className="rounded-lg bg-brand-cyan text-slate-900 font-semibold text-sm px-5 py-2.5 shadow-sm ring-1 ring-brand-cyan-deep/30 hover:bg-brand-cyan-deep/20 shrink-0"
               >
@@ -115,7 +121,7 @@ export default function CotacoesRecebidasPage() {
         )}
       </ul>
 
-      <Modal open={Boolean(ativo)} title="Responder cotação" onClose={() => setAtivo(null)}>
+      <Modal open={Boolean(ativo)} title="Responder cotação" onClose={() => setAtivo(null)} wide>
         {ativo ? (
           <form onSubmit={enviarResposta} className="space-y-4">
             <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 sm:p-4 space-y-3 text-sm text-slate-700">
@@ -170,6 +176,34 @@ export default function CotacoesRecebidasPage() {
                   </p>
                 ) : null}
               </div>
+            </div>
+            <div>
+              <label htmlFor="fornecedor" className="block text-xs font-medium text-slate-600 mb-1">
+                Fornecedor / loja
+              </label>
+              <input
+                id="fornecedor"
+                value={fornecedorNome}
+                onChange={(e) => setFornecedorNome(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                placeholder="Nome da autopeças"
+              />
+            </div>
+            <div>
+              <label htmlFor="marca" className="block text-xs font-medium text-slate-600 mb-1">
+                Marca
+              </label>
+              <select
+                id="marca"
+                value={marca}
+                onChange={(e) => setMarca(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white"
+              >
+                <option>Original</option>
+                <option>Paralela</option>
+                <option>Primeira linha</option>
+                <option>Usada com garantia</option>
+              </select>
             </div>
             <div>
               <label htmlFor="preco" className="block text-xs font-medium text-slate-600 mb-1">

@@ -28,8 +28,7 @@ const navByRole = {
     { to: '/dashboard/autopecas/perfil', label: 'Meu perfil' },
   ],
   seguradora: [
-    { to: '/dashboard/seguradora/sinistros', label: 'Sinistros' },
-    { to: '/dashboard/seguradora/aprovacoes', label: 'Concluídos (seguro)' },
+    { to: '/dashboard/seguradora/orcamentos', label: 'Aprovar orçamento' },
     { to: '/dashboard/seguradora/cadastro-veiculos', label: 'Cadastro de carros' },
     { to: '/dashboard/seguradora/historico', label: 'Histórico de sinistros' },
     { to: '/dashboard/seguradora/perfil', label: 'Meu perfil' },

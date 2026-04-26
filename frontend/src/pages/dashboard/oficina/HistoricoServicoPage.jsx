@@ -76,6 +76,22 @@ export default function HistoricoServicoPage() {
         ? 'No mesmo dia'
         : `${painel.mediaDias.toFixed(1).replace('.', ',')} dias`
 
+  const ticketMedio = painel.totalServicos ? painel.faturamentoTotal / painel.totalServicos : 0
+
+  const prontuarioPorPlaca = useMemo(() => {
+    const map = new Map()
+    for (const s of lista) {
+      const placa = String(s.placa || '—')
+      const atual = map.get(placa) || { placa, qtd: 0, total: 0, ultimaData: s.updatedAt || s.createdAt }
+      atual.qtd += 1
+      atual.total += totalPecasSugeridas(s.pecasSugeridas)
+      const fim = s.updatedAt || s.createdAt
+      if (new Date(fim) > new Date(atual.ultimaData)) atual.ultimaData = fim
+      map.set(placa, atual)
+    }
+    return [...map.values()].sort((a, b) => new Date(b.ultimaData) - new Date(a.ultimaData))
+  }, [lista])
+
   return (
     <>
       <div className="mb-8">
@@ -117,6 +133,20 @@ export default function HistoricoServicoPage() {
             icon={<CalendarRange className="h-5 w-5" strokeWidth={2} />}
             iconWrapClass="bg-brand-rose/35 text-rose-900/90"
           />
+        </div>
+      </section>
+      <section className="mb-8 rounded-xl bg-white border border-slate-200 shadow-sm p-4 sm:p-5">
+        <h2 className="text-sm font-semibold text-slate-800 mb-2">Indicadores de performance</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+          <p className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+            Ticket médio por OS: <span className="font-semibold">R$ {ticketMedio.toFixed(2)}</span>
+          </p>
+          <p className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+            Veículos atendidos: <span className="font-semibold">{prontuarioPorPlaca.length}</span>
+          </p>
+          <p className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+            Chamados com log: <span className="font-semibold">{lista.filter((x) => x.logDecisoes?.length).length}</span>
+          </p>
         </div>
       </section>
 
@@ -171,6 +201,37 @@ export default function HistoricoServicoPage() {
                   </tr>
                 )
               })
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-8 rounded-xl bg-white border border-slate-200 shadow-sm overflow-x-auto">
+        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/80">
+          <h2 className="text-sm font-semibold text-slate-800">Prontuário por veículo (placa)</h2>
+        </div>
+        <table className="w-full text-left text-sm min-w-[560px]">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
+              <th className="px-4 py-3 font-semibold">Placa</th>
+              <th className="px-4 py-3 font-semibold">Histórico de serviços</th>
+              <th className="px-4 py-3 font-semibold text-right">Total acumulado</th>
+              <th className="px-4 py-3 font-semibold">Última atualização</th>
+            </tr>
+          </thead>
+          <tbody>
+            {prontuarioPorPlaca.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-slate-500">Sem dados de prontuário.</td>
+              </tr>
+            ) : (
+              prontuarioPorPlaca.map((p) => (
+                <tr key={p.placa} className="border-b border-slate-100">
+                  <td className="px-4 py-3 font-mono">{p.placa}</td>
+                  <td className="px-4 py-3">{p.qtd}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">R$ {p.total.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-xs text-slate-500">{new Date(p.ultimaData).toLocaleString('pt-BR')}</td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>
